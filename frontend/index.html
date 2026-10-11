@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <link rel="icon" href="/petal.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#fffaf6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#241c21" media="(prefers-color-scheme: dark)" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Nunito+Sans:opsz,wght@6..12,300..700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!--
+      Everything between these two markers is replaced by the backend with
+      per-bouquet Open Graph tags when it serves /b/{id} in production, and
+      with the site defaults on every other route. Leave the markers exactly as
+      they are; see backend/app/main.py (META_OPEN / META_CLOSE).
+
+      In dev, Vite serves this file untouched and the tags below apply as-is.
+    -->
+    <!--petalpost:meta-->
+    <title>Petal Post</title>
+    <meta name="description" content="Build a digital bouquet, add a note, share a short link." />
+    <!--/petalpost:meta-->
+
+    <script>
+      /*
+       * Resolve the colour theme before first paint so a dark-mode visitor
+       * never gets a flash of cream. Mirrors src/lib/theme.ts; if you change
+       * the storage key, change it in both places.
+       */
+      (function () {
+        try {
+          var stored = localStorage.getItem('petalpost:theme');
+          var dark =
+            stored === 'dark' ||
+            (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+        } catch (e) {
+          /* private mode: fall back to the light theme */
+        }
+      })();
+    </script>
+  </head>
+  <body class="h-full">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

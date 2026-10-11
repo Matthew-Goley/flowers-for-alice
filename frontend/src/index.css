@@ -1,0 +1,179 @@
+@import 'tailwindcss';
+
+/*
+ * Dark mode is driven by a class on <html> rather than the media query alone,
+ * because the header has a manual toggle. The inline script in index.html sets
+ * the class before first paint.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: 'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
+  --font-sans: 'Nunito Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Fixed palette: these never flip between themes. */
+  --color-cream-50: #fffaf6;
+  --color-cream-100: #fdf3ec;
+  --color-cream-200: #f7e8dd;
+  --color-cream-300: #efd9c9;
+
+  --color-blush-100: #fdeef2;
+  --color-blush-200: #fadce3;
+  --color-blush-300: #f3bccb;
+  --color-blush-400: #e4879f;
+  --color-blush-500: #cf6382;
+  --color-blush-600: #ab4762;
+
+  --color-sage-100: #eef3ea;
+  --color-sage-200: #dde8d6;
+  --color-sage-300: #a8bf9c;
+  --color-sage-400: #7d9c70;
+  --color-sage-500: #5c7d52;
+  --color-sage-600: #41603a;
+
+  --color-plum-700: #3b2d35;
+  --color-plum-800: #2f2429;
+  --color-plum-900: #241c21;
+  --color-plum-950: #1a1419;
+
+  --color-gold-300: #f2d08a;
+  --color-gold-400: #e8b14a;
+  --color-gold-500: #c9902c;
+
+  /*
+   * Semantic tokens. These point at the --pp-* variables below, which is what
+   * lets a single class like `bg-surface` be correct in both themes.
+   */
+  --color-page: var(--pp-page);
+  --color-surface: var(--pp-surface);
+  --color-sunk: var(--pp-sunk);
+  --color-ink: var(--pp-ink);
+  --color-ink-soft: var(--pp-ink-soft);
+  --color-ink-faint: var(--pp-ink-faint);
+  --color-line: var(--pp-line);
+  --color-line-strong: var(--pp-line-strong);
+  --color-accent: var(--pp-accent);
+  --color-accent-ink: var(--pp-accent-ink);
+  --color-accent-wash: var(--pp-accent-wash);
+
+  --radius-card: 1.5rem;
+  --radius-pill: 999px;
+
+  --shadow-petal: 0 1px 2px rgb(63 48 56 / 0.04), 0 10px 30px -12px rgb(63 48 56 / 0.18);
+  --shadow-petal-lg: 0 2px 4px rgb(63 48 56 / 0.05), 0 28px 60px -24px rgb(63 48 56 / 0.3);
+
+  --ease-petal: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:root {
+  color-scheme: light;
+
+  --pp-page: #fffaf6;
+  --pp-surface: #ffffff;
+  --pp-sunk: #fdf3ec;
+  --pp-ink: #3f3038;
+  --pp-ink-soft: #6b5862;
+  --pp-ink-faint: #9b8793;
+  --pp-line: #f0e2d8;
+  --pp-line-strong: #e2cfc2;
+  --pp-accent: #cf6382;
+  --pp-accent-ink: #ab4762;
+  --pp-accent-wash: #fdeef2;
+}
+
+:root.dark {
+  color-scheme: dark;
+
+  --pp-page: #241c21;
+  --pp-surface: #2f2429;
+  --pp-sunk: #1f181d;
+  --pp-ink: #f6ebe4;
+  --pp-ink-soft: #cbb7c0;
+  --pp-ink-faint: #9c868f;
+  --pp-line: #43343b;
+  --pp-line-strong: #574450;
+  --pp-accent: #f3bccb;
+  --pp-accent-ink: #fadce3;
+  --pp-accent-wash: #3b2d35;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-page);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* One visible, consistent focus ring everywhere, including custom controls. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  ::selection {
+    background: var(--color-accent-wash);
+    color: var(--color-ink);
+  }
+}
+
+@layer components {
+  /* Skip link: off-screen until focused. */
+  .skip-link {
+    position: absolute;
+    left: 0.75rem;
+    top: -4rem;
+    z-index: 100;
+    border-radius: 999px;
+    background: var(--color-surface);
+    padding: 0.6rem 1.1rem;
+    font-weight: 600;
+    box-shadow: var(--shadow-petal);
+    transition: top 150ms var(--ease-petal);
+  }
+
+  .skip-link:focus {
+    top: 0.75rem;
+  }
+}
+
+/*
+ * Respect the OS setting. Framer Motion is told separately (useReducedMotion),
+ * but this catches CSS transitions and any animation we did not think about.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
