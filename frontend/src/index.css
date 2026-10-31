@@ -118,6 +118,27 @@
   .skip-link:focus {
     top: 0.75rem;
   }
+
+  /* The opening flower wall (components/FlowerWall.tsx). */
+  .wall-flower {
+    position: absolute;
+  }
+
+  .wall-flower.is-falling {
+    animation-name: wall-fall;
+    /* Ease-in, like something let go of: slow to start, fast by the bottom. */
+    animation-timing-function: cubic-bezier(0.5, 0, 0.8, 0.25);
+    animation-fill-mode: both;
+  }
+}
+
+@keyframes wall-fall {
+  from {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  to {
+    transform: translate3d(0, calc(100vh + 220px), 0) rotate(var(--wall-spin));
+  }
 }
 
 /*

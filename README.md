@@ -79,9 +79,12 @@ npx tsx scripts/bouquet-sheet.tsx bouquet-sheet.svg  # assembled bouquets
 ## How it works
 
 **Home (`/`)** fetches `GET /api/home`, which returns the most recently created
-bouquet, or `null`. Blooms appear one at a time, then the note. A bouquet with
-a future reveal date is drawn wrapped with a countdown; the server withholds
-its flowers and message until then.
+bouquet, or `null`. On the first visit a wall of flowers covers the screen and
+falls away to reveal it. A bouquet with a future reveal date is drawn wrapped
+with a countdown; the server withholds its flowers and message until then.
+
+**Arranging.** Drag a flower to move it. Hold R and move the mouse to turn the
+selected flower (or the one being dragged). Undo and redo with Ctrl/Cmd+Z.
 
 **The code.** The menu's code prompt posts to `POST /api/unlock`. On success the
 code is kept in `sessionStorage` and the browser goes to `/create`. That check

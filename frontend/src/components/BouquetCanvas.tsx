@@ -11,7 +11,9 @@
 
 import {
   useCallback,
+  useEffect,
   useRef,
+  useState,
   type PointerEvent as ReactPointerEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactElement,
@@ -24,6 +26,17 @@ import WrapPaper, { Ribbon } from './wraps/WrapPaper';
 import { BINDING_POINT } from '../lib/arrange';
 
 const STEM_COLOR = '#6d8c63';
+
+/** Degrees of turn per screen pixel of horizontal mouse travel while R is held. */
+const ROTATE_DEGREES_PER_PX = 0.6;
+
+/** True when a key press belongs to a text field rather than the canvas. */
+function isTyping(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+  );
+}
 
 /** Nominal bloom size: a scale of 1 draws the flower at this fraction of the canvas. */
 const BLOOM_SIZE = 34;
@@ -54,7 +67,12 @@ export interface BouquetCanvasProps {
   visibleCount?: number;
   /** Enables dragging. Receives canvas-space coordinates (0-100). */
   onMoveFlower?: (index: number, x: number, y: number) => void;
-  /** Called once a drag gesture finishes, so history can record one step. */
+  /**
+   * Enables rotating: hold R and move the mouse to turn the selected flower
+   * (or the one being dragged). Receives an absolute angle in degrees.
+   */
+  onRotateFlower?: (index: number, rotation: number) => void;
+  /** Called once a drag or rotate gesture finishes, so history can record one step. */
   onMoveEnd?: () => void;
   selectedIndex?: number | null;
   onSelect?: (index: number | null) => void;
@@ -86,6 +104,7 @@ export default function BouquetCanvas({
   sealed = false,
   visibleCount,
   onMoveFlower,
+  onRotateFlower,
   onMoveEnd,
   selectedIndex = null,
   onSelect,
@@ -95,6 +114,14 @@ export default function BouquetCanvas({
 }: BouquetCanvasProps): ReactElement {
   const localRef = useRef<SVGSVGElement | null>(null);
   const draggingRef = useRef<number | null>(null);
+  // R is held: mouse movement turns a flower instead of moving it. The ref is
+  // what the pointer handler reads; the state only drives the cursor.
+  const rHeldRef = useRef(false);
+  const [rHeld, setRHeld] = useState(false);
+  // The rotate gesture in progress: which flower, and where it started.
+  const rotateRef = useRef<{ index: number; startX: number; startRotation: number } | null>(
+    null,
+  );
 
   const setRefs = useCallback(
     (node: SVGSVGElement | null) => {
@@ -127,21 +154,82 @@ export default function BouquetCanvas({
     [onMoveFlower, onSelect],
   );
 
+  // Track R for the whole page while the canvas is interactive. Releasing it,
+  // or the window losing focus mid-gesture, ends the rotation as one step.
+  useEffect(() => {
+    if (!onRotateFlower) return;
+    const isR = (event: KeyboardEvent) => event.key === 'r' || event.key === 'R';
+    const finish = () => {
+      rHeldRef.current = false;
+      setRHeld(false);
+      if (rotateRef.current) {
+        rotateRef.current = null;
+        onMoveEnd?.();
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isR(event) || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (isTyping(event.target)) return;
+      rHeldRef.current = true;
+      setRHeld(true);
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (isR(event)) finish();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', finish);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', finish);
+    };
+  }, [onRotateFlower, onMoveEnd]);
+
+  /**
+   * One handler for the whole canvas. Pointer capture retargets a drag to the
+   * flower's group, and the event bubbles up here, so dragging and rotating
+   * both arrive through this one path.
+   */
   const handlePointerMove = useCallback(
-    (event: ReactPointerEvent<SVGGElement>) => {
+    (event: ReactPointerEvent<SVGSVGElement>) => {
+      const target = draggingRef.current ?? selectedIndex;
+
+      if (rHeldRef.current && onRotateFlower && target !== null) {
+        const flower = scene.flowers[target];
+        if (!flower) return;
+        const gesture = rotateRef.current;
+        if (!gesture || gesture.index !== target) {
+          rotateRef.current = {
+            index: target,
+            startX: event.clientX,
+            startRotation: flower.rotation,
+          };
+          return;
+        }
+        onRotateFlower(
+          target,
+          gesture.startRotation + (event.clientX - gesture.startX) * ROTATE_DEGREES_PER_PX,
+        );
+        return;
+      }
+
       const index = draggingRef.current;
       const svg = localRef.current;
       if (index === null || !svg || !onMoveFlower) return;
       const point = toCanvasPoint(svg, event.clientX, event.clientY);
       if (point) onMoveFlower(index, point.x, point.y);
     },
-    [onMoveFlower],
+    [onMoveFlower, onRotateFlower, selectedIndex, scene.flowers],
   );
 
   const endDrag = useCallback(
     (event: ReactPointerEvent<SVGGElement>) => {
       if (draggingRef.current === null) return;
       draggingRef.current = null;
+      // A rotation made during the drag is committed with it; holding R
+      // afterwards starts a fresh rotate gesture on the selected flower.
+      rotateRef.current = null;
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
@@ -180,6 +268,7 @@ export default function BouquetCanvas({
       strokeLinejoin="round"
       strokeLinecap="round"
       style={{ touchAction: interactive ? 'none' : undefined, color: ink }}
+      onPointerMove={interactive ? handlePointerMove : undefined}
     >
       {/* An opaque ground so the exported PNG is never transparent. */}
       <rect width="100" height="100" fill={paper} />
@@ -218,7 +307,6 @@ export default function BouquetCanvas({
                 size / 100
               }) translate(-50 -50)`}
               onPointerDown={interactive ? handlePointerDown(index) : undefined}
-              onPointerMove={interactive ? handlePointerMove : undefined}
               onPointerUp={interactive ? endDrag : undefined}
               onPointerCancel={interactive ? endDrag : undefined}
               onKeyDown={interactive ? handleKeyDown(index, flower) : undefined}
@@ -231,7 +319,7 @@ export default function BouquetCanvas({
                     )} down. Use the arrow keys to move it.`
                   : undefined
               }
-              style={{ cursor: interactive ? 'grab' : undefined }}
+              style={{ cursor: interactive ? (rHeld ? 'ew-resize' : 'grab') : undefined }}
             >
               {selected && (
                 <circle

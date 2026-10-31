@@ -2,10 +2,12 @@
  * Step 2: arrange.
  *
  * The bouquet is laid out automatically on arrival. From there the sender can
- * shuffle for a new composition, drag individual blooms, and undo or redo.
+ * shuffle for a new composition, drag individual blooms, turn one by holding R
+ * and moving the mouse, and undo or redo.
  *
- * History is committed per gesture, not per frame: dragging fires continuously
- * but only the state at pointer-down is pushed, so one drag is one undo.
+ * History is committed per gesture, not per frame: dragging and turning fire
+ * continuously but only the state before the gesture is pushed, so one drag
+ * (or one hold of R) is one undo.
  */
 
 import { useCallback, useRef, useState, type Dispatch } from 'react';
@@ -58,6 +60,14 @@ export default function StepArrange({ state, dispatch }: Props) {
     [dispatch, state.flowers],
   );
 
+  const handleRotate = useCallback(
+    (index: number, rotation: number) => {
+      if (!dragStart.current) dragStart.current = state.flowers;
+      dispatch({ type: 'rotateFlower', index, rotation });
+    },
+    [dispatch, state.flowers],
+  );
+
   const handleMoveEnd = useCallback(() => {
     const before = dragStart.current;
     dragStart.current = null;
@@ -79,11 +89,12 @@ export default function StepArrange({ state, dispatch }: Props) {
             paper={paper}
             ink={ink}
             onMoveFlower={handleMove}
+            onRotateFlower={handleRotate}
             onMoveEnd={handleMoveEnd}
             selectedIndex={selected}
             onSelect={setSelected}
             className="aspect-square w-full"
-            title="Your bouquet. Drag a flower to move it, or focus one and use the arrow keys."
+            title="Your bouquet. Drag a flower to move it, hold R and move the mouse to turn it, or focus one and use the arrow keys."
           />
         </div>
       </div>

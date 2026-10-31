@@ -10,10 +10,11 @@ corner opens a code prompt; the right code unlocks the four-step builder, and
 finishing it replaces the home page bouquet for everyone. Standalone repo, no
 relation to the other projects in `_Dev_ALL/`.
 
-The site carries **no product branding**: no name, logo, tagline or footer. The
-page title is just "Flowers". `render.test.tsx` asserts that the old product
-names ("Flowers for Alice", "Petal Post") never render. The git remote is
-still `flowers-for-alice`.
+The page itself carries **no product branding**: no name, logo, tagline or
+footer, and `render.test.tsx` asserts that "Flowers for Alice" and "Petal Post"
+never render into the app. The one exception, by request, is the browser tab:
+`index.html` sets the title to "Flowers for Alice" and the icon to
+`public/heart.svg`. The git remote is `flowers-for-alice`.
 
 Internal identifiers still carry the old working title on purpose and should be
 left alone: the `PETALPOST_` env prefix, the `petalpost:*` storage keys and
@@ -51,7 +52,7 @@ Frontend (`cd frontend`):
 ```bash
 npm run dev          # port 5173, proxies /api to 8000
 npm run build        # tsc --noEmit, then vite build
-npm test             # vitest, 103 tests
+npm test             # vitest, 107 tests
 npx vitest run -t "undo returns the previous value"   # one test, by name
 npm run lint         # ESLint, type-aware
 npm run format       # Prettier
@@ -86,6 +87,43 @@ binary and vitest 5 does not pull vite-node in).
 
 Anything else redirects to `/`. Home renders nothing while loading, so the lone
 rose never flashes up ahead of a bouquet that is on its way.
+
+### The flower wall is the reveal
+
+On the first visit of a page load, `components/FlowerWall.tsx` covers the
+screen with a grid of overlapping blooms over a white ground. It waits for the
+home fetch to settle (and at least `MIN_HOLD`), then every bloom gets the
+`wall-fall` CSS animation from `index.css`, top rows first. Rows are emitted
+bottom-first in the DOM so each upper row paints over the ones below as it
+falls. The bouquet underneath is drawn whole; nothing is staged one bloom at a
+time any more. A module-level `wallPlayed` flag in `Home.tsx` stops the wall
+replaying when the user comes back from `/create`. It is set only when the wall
+finishes, because StrictMode mounts twice. Reduced motion skips the wall. Headless
+browsers with a virtual time budget do not advance CSS animations, so check it
+with real-time frames, not `--virtual-time-budget`.
+
+### Rotating a flower: hold R and move the mouse
+
+In the arrange step, `BouquetCanvas` listens for R on `window` (ignored while
+typing in a field, or with Ctrl/Meta/Alt held). While R is held, horizontal
+mouse travel turns the selected flower, or the one being dragged, at
+`ROTATE_DEGREES_PER_PX`. It uses horizontal travel, not the angle around the
+flower, because the cursor usually sits on the flower and an angle reading
+there spins wildly. One hold of R is one undo step: `StepArrange` shares the
+`dragStart` ref between move and rotate, and releasing R (or the window
+blurring) calls `onMoveEnd`. Angles go through `normaliseAngle` into
+(-180, 180], inside the API's -360 to 360 limit. All pointer moves are handled
+on the `<svg>`; pointer capture retargets a drag to the flower's `<g>` and it
+bubbles up.
+
+### The tulip is the detailed one
+
+`Tulip.tsx` is drawn with far more care than the other eleven flowers. It is her
+favourite. It is the only flower with SVG gradients and a clip path, so it calls
+`useId()` for per-instance ids. Two consequences: render it as a component
+(`createElement(art, ...)` or `<Art />`), never call it as a plain function; and
+two separate `renderToStaticMarkup` calls produce colliding ids, so put a
+multi-tulip preview in one render. Mono mode drops every gradient and highlight.
 
 ### The create code is checked twice, and only the second check matters
 

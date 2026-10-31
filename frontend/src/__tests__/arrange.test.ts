@@ -3,7 +3,9 @@ import {
   arrangeBouquet,
   clampToCanvas,
   moveFlower,
+  normaliseAngle,
   reshuffle,
+  rotateFlower,
   splitRows,
   stemsFromCounts,
   type Stem,
@@ -152,6 +154,43 @@ describe('moveFlower', () => {
     const snapshot = structuredClone(flowers);
     moveFlower(flowers, 1, 0, 0);
     expect(flowers).toEqual(snapshot);
+  });
+});
+
+describe('rotateFlower', () => {
+  it('turns only the targeted bloom, leaving its position alone', () => {
+    const flowers = arrangeBouquet(stems(6), 8);
+    const turned = rotateFlower(flowers, 3, 45);
+    expect(turned[3]?.rotation).toBe(45);
+    expect(turned[3]?.x).toBe(flowers[3]?.x);
+    expect(turned[0]).toEqual(flowers[0]);
+  });
+
+  it('keeps any number of spins inside the range the API accepts', () => {
+    const flowers = arrangeBouquet(stems(6), 8);
+    for (const angle of [721, -900, 3600.5, -181]) {
+      const rotation = rotateFlower(flowers, 0, angle)[0]?.rotation ?? NaN;
+      expect(rotation).toBeGreaterThan(-180);
+      expect(rotation).toBeLessThanOrEqual(180);
+    }
+  });
+
+  it('does not mutate the input', () => {
+    const flowers = arrangeBouquet(stems(6), 8);
+    const snapshot = structuredClone(flowers);
+    rotateFlower(flowers, 1, 90);
+    expect(flowers).toEqual(snapshot);
+  });
+});
+
+describe('normaliseAngle', () => {
+  it('wraps to (-180, 180]', () => {
+    expect(normaliseAngle(0)).toBe(0);
+    expect(normaliseAngle(190)).toBe(-170);
+    expect(normaliseAngle(-190)).toBe(170);
+    expect(normaliseAngle(180)).toBe(180);
+    expect(normaliseAngle(-180)).toBe(180);
+    expect(normaliseAngle(360)).toBe(0);
   });
 });
 

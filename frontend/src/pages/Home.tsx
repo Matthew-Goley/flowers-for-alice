@@ -5,14 +5,18 @@
  * The only control is the menu in the bottom-left corner, which leads to the
  * code prompt and from there to the builder.
  *
+ * The first visit of each page load opens behind a wall of flowers that
+ * falls away once the bouquet is ready (see FlowerWall).
+ *
  * A scheduled bouquet arrives without its contents (the server withholds
  * them until the reveal date), so it is drawn wrapped, with a countdown.
  */
 
-import { useEffect, useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { useCallback, useEffect, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import BouquetCanvas, { type BouquetScene } from '../components/BouquetCanvas';
 import Countdown from '../components/Countdown';
+import FlowerWall from '../components/FlowerWall';
 import HomeMenu from '../components/HomeMenu';
 import { FLOWERS } from '../components/flowers';
 import { fetchHome } from '../lib/api';
@@ -21,12 +25,24 @@ import type { OpenBouquet, SharedBouquet } from '../types/bouquet';
 
 type Status = 'loading' | 'empty' | 'ready';
 
-/** Milliseconds between blooms as the bouquet fills in. */
-const BLOOM_INTERVAL = 160;
+/**
+ * Whether the wall has already fallen in this page load. Module state, not
+ * component state, so coming back from the builder does not replay it; it is
+ * only set once the wall finishes, which keeps StrictMode's double mount from
+ * skipping it.
+ */
+let wallPlayed = false;
 
 export default function Home() {
+  const reduceMotion = useReducedMotion();
   const [status, setStatus] = useState<Status>('loading');
   const [bouquet, setBouquet] = useState<SharedBouquet | null>(null);
+  const [showWall, setShowWall] = useState(() => !wallPlayed && !reduceMotion);
+
+  const wallDone = useCallback(() => {
+    wallPlayed = true;
+    setShowWall(false);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -64,6 +80,7 @@ export default function Home() {
       )}
 
       <HomeMenu />
+      {showWall && <FlowerWall ready={status !== 'loading'} onDone={wallDone} />}
     </div>
   );
 }
@@ -111,18 +128,6 @@ function LoneFlower() {
 
 function OpenView({ bouquet }: { bouquet: OpenBouquet }) {
   const { paper, ink } = useArtColors();
-  const reduceMotion = useReducedMotion();
-  const total = bouquet.flowers.length;
-
-  const [visible, setVisible] = useState(reduceMotion ? total : 0);
-  const done = visible >= total;
-
-  // Blooms arrive one at a time; the note follows the last one.
-  useEffect(() => {
-    if (done) return;
-    const timer = setTimeout(() => setVisible((count) => count + 1), BLOOM_INTERVAL);
-    return () => clearTimeout(timer);
-  }, [visible, done]);
 
   const scene: BouquetScene = {
     mode: bouquet.mode,
@@ -135,39 +140,32 @@ function OpenView({ bouquet }: { bouquet: OpenBouquet }) {
 
   const hasNote = Boolean(bouquet.recipientName || bouquet.message || bouquet.senderName);
 
+  // Drawn whole: the flower wall is the reveal, so nothing is staged here.
   return (
     <div className="w-full max-w-lg">
       <BouquetCanvas
         scene={scene}
         paper={paper}
         ink={ink}
-        visibleCount={visible}
         className="aspect-square w-full"
         title={bouquet.recipientName ? `A bouquet for ${bouquet.recipientName}` : 'A bouquet'}
       />
 
-      <AnimatePresence>
-        {done && hasNote && (
-          <motion.div
-            initial={reduceMotion ? false : { opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="mx-auto mt-6 max-w-md text-center"
-          >
-            {bouquet.recipientName && (
-              <p className="font-display text-2xl text-ink">{bouquet.recipientName},</p>
-            )}
-            {bouquet.message && (
-              <p className="mt-3 text-lg leading-relaxed whitespace-pre-line text-ink">
-                {bouquet.message}
-              </p>
-            )}
-            {bouquet.senderName && (
-              <p className="mt-4 font-display text-xl text-ink-soft">{bouquet.senderName}</p>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {hasNote && (
+        <div className="mx-auto mt-6 max-w-md text-center">
+          {bouquet.recipientName && (
+            <p className="font-display text-2xl text-ink">{bouquet.recipientName},</p>
+          )}
+          {bouquet.message && (
+            <p className="mt-3 text-lg leading-relaxed whitespace-pre-line text-ink">
+              {bouquet.message}
+            </p>
+          )}
+          {bouquet.senderName && (
+            <p className="mt-4 font-display text-xl text-ink-soft">{bouquet.senderName}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

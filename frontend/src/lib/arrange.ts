@@ -160,6 +160,26 @@ export function reshuffle(
   return arrangeBouquet(stems, seed);
 }
 
+/**
+ * Normalise an angle to (-180, 180]. The API accepts -360 to 360, and keeping
+ * it small means repeated spins can never walk a rotation out of range.
+ */
+export function normaliseAngle(degrees: number): number {
+  const wrapped = ((((degrees + 180) % 360) + 360) % 360) - 180;
+  return wrapped === -180 ? 180 : wrapped;
+}
+
+/** Turn one flower to an absolute angle in degrees. Returns a new array. */
+export function rotateFlower(
+  flowers: readonly FlowerPlacement[],
+  index: number,
+  rotation: number,
+): FlowerPlacement[] {
+  return flowers.map((flower, i) =>
+    i === index ? { ...flower, rotation: round(normaliseAngle(rotation)) } : flower,
+  );
+}
+
 /** Move one flower, clamping it to the canvas. Returns a new array. */
 export function moveFlower(
   flowers: readonly FlowerPlacement[],

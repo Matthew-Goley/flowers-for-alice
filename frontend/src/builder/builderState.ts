@@ -22,7 +22,13 @@ import {
 } from '../types/bouquet';
 import { DEFAULT_RIBBON } from '../config';
 import { FLOWERS } from '../components/flowers';
-import { arrangeBouquet, moveFlower, reshuffle, stemsFromCounts } from '../lib/arrange';
+import {
+  arrangeBouquet,
+  moveFlower,
+  reshuffle,
+  rotateFlower,
+  stemsFromCounts,
+} from '../lib/arrange';
 import { buildLetterBouquet } from '../lib/letters';
 import { newSeed } from '../lib/random';
 
@@ -181,6 +187,7 @@ export type BuilderAction =
   | { type: 'setFlowers'; flowers: FlowerPlacement[] }
   | { type: 'shuffle' }
   | { type: 'dragFlower'; index: number; x: number; y: number }
+  | { type: 'rotateFlower'; index: number; rotation: number }
   | { type: 'setGreenery'; greenery: GreeneryType }
   | { type: 'setWrap'; wrap: WrapStyle }
   | { type: 'setRibbon'; ribbon: string }
@@ -294,6 +301,9 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
 
     case 'dragFlower':
       return { ...state, flowers: moveFlower(state.flowers, action.index, action.x, action.y) };
+
+    case 'rotateFlower':
+      return { ...state, flowers: rotateFlower(state.flowers, action.index, action.rotation) };
 
     case 'setGreenery':
       return { ...state, greenery: action.greenery };
