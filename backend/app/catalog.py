@@ -1,7 +1,7 @@
 """The canonical vocabulary of the bouquet schema.
 
 Mirrored on the frontend in `frontend/src/types/bouquet.ts`. If you add a flower,
-a wrap or a greenery style, change both files and the OG painter in `og_render.py`.
+a wrap or a greenery style, change both files.
 """
 
 from __future__ import annotations

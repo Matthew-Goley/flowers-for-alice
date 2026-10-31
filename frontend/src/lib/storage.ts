@@ -12,11 +12,9 @@
 import { STORAGE_KEYS } from '../config';
 import { INITIAL_STATE, type BuilderState, type StepIndex } from '../builder/builderState';
 import {
-  isBouquetMode,
   isFlowerType,
   isGreeneryType,
   isWrapStyle,
-  MAX_LETTER_CHARS,
   MAX_MESSAGE_CHARS,
   MAX_NAME_CHARS,
   type FlowerPlacement,
@@ -88,7 +86,6 @@ export function parseDraft(value: unknown): BuilderState | null {
   if (value.version !== 1 || !isRecord(value.state)) return null;
 
   const raw = value.state;
-  const mode = typeof raw.mode === 'string' && isBouquetMode(raw.mode) ? raw.mode : 'bouquet';
   const greenery =
     typeof raw.greenery === 'string' && isGreeneryType(raw.greenery)
       ? raw.greenery
@@ -100,13 +97,14 @@ export function parseDraft(value: unknown): BuilderState | null {
       : INITIAL_STATE.ribbon;
 
   const step = Math.min(3, Math.max(0, Math.floor(num(raw.step, 0)))) as StepIndex;
-  const revealAt = typeof raw.revealAt === 'string' && raw.revealAt ? raw.revealAt : null;
 
   return {
-    // A restored draft never lands on the share step: that step posts to the
+    // A restored draft never lands on the finish step: that step posts to the
     // API, and replaying it would create a duplicate bouquet.
     step: step === 3 ? 2 : step,
-    mode,
+    // Letters, line art and reveal dates are no longer offered, so a draft
+    // saved before they were removed comes back without them.
+    mode: 'bouquet',
     counts: parseCounts(raw.counts),
     colors: parseColors(raw.colors),
     flowers: parseFlowers(raw.flowers),
@@ -114,12 +112,12 @@ export function parseDraft(value: unknown): BuilderState | null {
     greenery,
     wrap,
     ribbon,
-    mono: raw.mono === true,
+    mono: false,
     recipientName: str(raw.recipientName, MAX_NAME_CHARS),
     senderName: str(raw.senderName, MAX_NAME_CHARS),
     message: str(raw.message, MAX_MESSAGE_CHARS),
-    letterText: str(raw.letterText, MAX_LETTER_CHARS),
-    revealAt,
+    letterText: '',
+    revealAt: null,
   };
 }
 
@@ -160,7 +158,6 @@ export function isDraftWorthKeeping(state: BuilderState): boolean {
   return (
     Object.keys(state.counts).length > 0 ||
     state.flowers.length > 0 ||
-    state.letterText.trim().length > 0 ||
     state.message.trim().length > 0 ||
     state.recipientName.trim().length > 0
   );

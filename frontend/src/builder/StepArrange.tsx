@@ -10,20 +10,18 @@
 
 import { useCallback, useRef, useState, type Dispatch } from 'react';
 import BouquetCanvas from '../components/BouquetCanvas';
-import Greenery from '../components/greenery/Greenery';
 import { Button, ChoiceGroup } from '../components/ui';
 import { useArtColors } from '../lib/theme';
 import { useHistory, useUndoShortcuts } from '../lib/useHistory';
 import type { FlowerPlacement, GreeneryType } from '../types/bouquet';
 import type { BuilderAction, BuilderState } from './builderState';
 
-const GREENERY_OPTIONS: readonly { value: GreeneryType; label: string; description: string }[] =
-  [
-    { value: 'none', label: 'None', description: 'Just the flowers' },
-    { value: 'eucalyptus', label: 'Eucalyptus', description: 'Round silver leaves' },
-    { value: 'fern', label: 'Fern', description: 'Feathery fronds' },
-    { value: 'babys-breath', label: "Baby's breath", description: 'Tiny white clouds' },
-  ];
+const GREENERY_OPTIONS: readonly { value: GreeneryType; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'eucalyptus', label: 'Eucalyptus' },
+  { value: 'fern', label: 'Fern' },
+  { value: 'babys-breath', label: "Baby's breath" },
+];
 
 interface Props {
   state: BuilderState;
@@ -88,10 +86,6 @@ export default function StepArrange({ state, dispatch }: Props) {
             title="Your bouquet. Drag a flower to move it, or focus one and use the arrow keys."
           />
         </div>
-        <p className="mt-2.5 text-center text-xs text-ink-faint">
-          Drag a flower to move it. With a keyboard: tab to a flower, then use the arrow keys
-          (hold shift to move further).
-        </p>
       </div>
 
       <div className="space-y-5">
@@ -124,36 +118,14 @@ export default function StepArrange({ state, dispatch }: Props) {
           </Button>
         </div>
 
-        {state.mode === 'bouquet' && (
-          <div className="rounded-card border border-line bg-sunk p-4">
-            <ChoiceGroup
-              legend="Greenery"
-              options={GREENERY_OPTIONS}
-              value={state.greenery}
-              onChange={(greenery) => dispatch({ type: 'setGreenery', greenery })}
-            />
-            <div className="mt-3 flex justify-center gap-4 rounded-2xl bg-surface py-3">
-              {(['eucalyptus', 'fern', 'babys-breath'] as const).map((kind) => (
-                // The sprigs fan out from (50, 72) and reach about 40 units,
-                // so this box frames the whole spray.
-                <svg
-                  key={kind}
-                  viewBox="8 28 84 48"
-                  className={`h-14 w-20 ${
-                    state.greenery === kind ? 'text-ink opacity-100' : 'text-ink opacity-35'
-                  }`}
-                  aria-hidden="true"
-                >
-                  <Greenery kind={kind} mono={false} paper={paper} />
-                </svg>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <p className="rounded-2xl border border-line bg-surface px-4 py-3 text-xs leading-relaxed text-ink-faint">
-          Nothing here is final. You can come back and rearrange until you share it.
-        </p>
+        <div className="rounded-card border border-line bg-sunk p-4">
+          <ChoiceGroup
+            legend="Greenery"
+            options={GREENERY_OPTIONS}
+            value={state.greenery}
+            onChange={(greenery) => dispatch({ type: 'setGreenery', greenery })}
+          />
+        </div>
       </div>
     </div>
   );

@@ -159,10 +159,17 @@ class BouquetDesign(BaseModel):
 
 
 class BouquetCreated(BaseModel):
-    """What the share step receives back."""
+    """What the builder receives back once the bouquet is on the home page."""
 
     id: str
-    url_path: str
+
+
+class UnlockRequest(BaseModel):
+    """The code typed into the home page's create prompt."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(max_length=64)
 
 
 class BouquetOut(BouquetDesign):
@@ -192,13 +199,6 @@ class BouquetLocked(BaseModel):
     sender_name: str
 
 
-class FlowerMeaning(BaseModel):
-    type: FlowerType
-    name: str
-    meaning: str
-
-
 class Health(BaseModel):
     status: str
-    app: str
     version: str

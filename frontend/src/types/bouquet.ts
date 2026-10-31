@@ -3,7 +3,7 @@
  *
  * This is the TypeScript mirror of `backend/app/schemas.py` and
  * `backend/app/catalog.py`. If you add a flower, a wrap or a greenery style,
- * change it in all three places plus the OG painter in `backend/app/og_render.py`.
+ * change it in all three places.
  */
 
 export const FLOWER_TYPES = [
@@ -102,7 +102,6 @@ export type SharedBouquet = OpenBouquet | LockedBouquet;
 
 export interface CreatedBouquet {
   id: string;
-  urlPath: string;
 }
 
 // --------------------------------------------------------------------------
@@ -158,7 +157,6 @@ export type WireBouquet = WireOpenBouquet | WireLockedBouquet;
 
 export interface WireCreated {
   id: string;
-  url_path: string;
 }
 
 // --------------------------------------------------------------------------

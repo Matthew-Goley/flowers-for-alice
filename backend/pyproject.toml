@@ -1,7 +1,7 @@
 [project]
-name = "petal-post-backend"
+name = "bouquet-backend"
 version = "1.0.0"
-description = "API and social-preview renderer for the Petal Post bouquet maker."
+description = "API for the bouquet maker."
 requires-python = ">=3.12"
 
 [tool.ruff]

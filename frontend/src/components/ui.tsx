@@ -19,8 +19,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary:
-    'bg-accent text-white shadow-petal hover:brightness-110 active:brightness-95 dark:text-plum-900',
+  primary: 'bg-accent text-white shadow-petal hover:brightness-110 active:brightness-95',
   secondary:
     'bg-surface text-ink border border-line-strong hover:border-accent hover:text-accent-ink',
   ghost: 'text-ink-soft hover:text-ink hover:bg-sunk',
@@ -322,47 +321,6 @@ export function SwatchPicker({
         })}
       </div>
     </fieldset>
-  );
-}
-
-/** An accessible on/off switch. */
-export function Switch({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string;
-  description?: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  const id = useId();
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <span>
-        <label htmlFor={id} className="block text-sm font-semibold text-ink">
-          {label}
-        </label>
-        {description && <span className="block text-xs text-ink-faint">{description}</span>}
-      </span>
-      <button
-        id={id}
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative h-7 w-12 shrink-0 rounded-pill border transition-colors ${
-          checked ? 'border-accent bg-accent' : 'border-line-strong bg-sunk'
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] duration-200 ${
-            checked ? 'left-6' : 'left-0.5'
-          }`}
-        />
-      </button>
-    </div>
   );
 }
 

@@ -124,7 +124,7 @@ function fromWire(wire: WireBouquet): SharedBouquet {
   return open;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function send(path: string, init?: RequestInit): Promise<Response> {
   let response: Response;
   try {
     response = await fetch(path, init);
@@ -132,34 +132,38 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(0, 'We could not reach the server. Check your connection.');
   }
   if (!response.ok) throw await describeFailure(response);
+  return response;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await send(path, init);
   return (await response.json()) as T;
 }
 
-export async function createBouquet(design: BouquetDesign): Promise<CreatedBouquet> {
-  const wire = await request<WireCreated>('/api/bouquets', {
+/** Check the create code. Resolves when accepted, throws a 403 ApiError when not. */
+export async function unlock(code: string): Promise<void> {
+  await send('/api/unlock', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  });
+}
+
+/** Save a bouquet. It becomes the one on the home page. */
+export async function createBouquet(
+  design: BouquetDesign,
+  code: string,
+): Promise<CreatedBouquet> {
+  const wire = await request<WireCreated>('/api/bouquets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Create-Code': code },
     body: JSON.stringify(toWire(design)),
   });
-  return { id: wire.id, urlPath: wire.url_path };
+  return { id: wire.id };
 }
 
-export async function fetchBouquet(id: string, signal?: AbortSignal): Promise<SharedBouquet> {
-  const wire = await request<WireBouquet>(
-    `/api/bouquets/${encodeURIComponent(id)}`,
-    signal ? { signal } : undefined,
-  );
-  return fromWire(wire);
-}
-
-/** Absolute, shareable URL for a bouquet. */
-export function shareUrl(id: string): string {
-  if (typeof window === 'undefined') return `/b/${id}`;
-  return new URL(`/b/${id}`, window.location.origin).toString();
-}
-
-/** Absolute URL of the server-rendered social preview. */
-export function ogUrl(id: string): string {
-  if (typeof window === 'undefined') return `/api/og/${id}`;
-  return new URL(`/api/og/${id}`, window.location.origin).toString();
+/** The bouquet on the home page, or null before anyone has made one. */
+export async function fetchHome(signal?: AbortSignal): Promise<SharedBouquet | null> {
+  const wire = await request<WireBouquet | null>('/api/home', signal ? { signal } : undefined);
+  return wire ? fromWire(wire) : null;
 }

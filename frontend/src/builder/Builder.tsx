@@ -12,7 +12,6 @@ import { isDraftWorthKeeping, loadDraft, saveDraft } from '../lib/storage';
 import {
   builderReducer,
   canAdvance,
-  ensureArranged,
   INITIAL_STATE,
   maxReachableStep,
   STEPS,
@@ -20,36 +19,13 @@ import {
   type StepIndex,
 } from './builderState';
 import StepArrange from './StepArrange';
+import StepFinish from './StepFinish';
 import StepFlowers from './StepFlowers';
-import StepShare from './StepShare';
 import StepWrap from './StepWrap';
-import type { BouquetMode } from '../types/bouquet';
 
-export interface BuilderProps {
-  /**
-   * Preloaded state, e.g. from an occasion preset. Overrides any saved draft.
-   *
-   * Callers that can switch between presets should pass a React `key` as well,
-   * so swapping preset remounts the builder instead of merging a new preset
-   * into half-finished work.
-   */
-  preset?: Partial<BuilderState>;
-  /** Forces a mode on mount, used by /letters. */
-  mode?: BouquetMode;
-}
-
-function initialise(
-  preset: Partial<BuilderState> | undefined,
-  mode?: BouquetMode,
-): BuilderState {
-  if (preset) {
-    return ensureArranged({ ...INITIAL_STATE, ...preset, ...(mode ? { mode } : {}) });
-  }
+function initialise(): BuilderState {
   const draft = loadDraft();
-  if (draft && isDraftWorthKeeping(draft)) {
-    return mode && draft.mode !== mode ? { ...INITIAL_STATE, mode } : draft;
-  }
-  return mode ? { ...INITIAL_STATE, mode } : INITIAL_STATE;
+  return draft && isDraftWorthKeeping(draft) ? draft : INITIAL_STATE;
 }
 
 function StepDots({
@@ -74,6 +50,7 @@ function StepDots({
               onClick={() => canJump && onJump(index as StepIndex)}
               disabled={!canJump}
               aria-current={state === 'current' ? 'step' : undefined}
+              aria-label={`Step ${index + 1}: ${step.title}`}
               className={`flex items-center gap-2 rounded-pill px-2.5 py-1.5 text-sm transition-colors ${
                 state === 'current'
                   ? 'bg-accent-wash font-bold text-accent-ink'
@@ -84,9 +61,7 @@ function StepDots({
             >
               <span
                 className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                  state === 'upcoming'
-                    ? 'bg-sunk text-ink-faint'
-                    : 'bg-accent text-white dark:text-plum-900'
+                  state === 'upcoming' ? 'bg-sunk text-ink-faint' : 'bg-accent text-white'
                 }`}
               >
                 {state === 'complete' ? (
@@ -96,9 +71,6 @@ function StepDots({
                 ) : (
                   index + 1
                 )}
-              </span>
-              <span className={index === current ? 'inline' : 'hidden sm:inline'}>
-                {step.short}
               </span>
             </button>
             {index < STEPS.length - 1 && (
@@ -116,15 +88,13 @@ function StepDots({
   );
 }
 
-export default function Builder({ preset, mode }: BuilderProps) {
-  const [state, dispatch] = useReducer(builderReducer, undefined, () =>
-    initialise(preset, mode),
-  );
+export default function Builder() {
+  const [state, dispatch] = useReducer(builderReducer, undefined, initialise);
   const reduceMotion = useReducedMotion();
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const firstRender = useRef(true);
 
-  // Persist the draft. The share step clears it on success, so there is no
+  // Persist the draft. The finish step clears it on success, so there is no
   // point writing while we are on it.
   useEffect(() => {
     if (state.step === 3) return;
@@ -176,27 +146,8 @@ export default function Builder({ preset, mode }: BuilderProps) {
 
   return (
     <div className="rounded-card border border-line bg-page p-4 shadow-petal-lg sm:p-7">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-5">
         <StepDots current={state.step} onJump={goTo} reachable={maxReachableStep(state)} />
-        {state.step < 3 && (
-          <div className="flex items-center gap-1 rounded-pill bg-sunk p-1">
-            {(['bouquet', 'letters'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => dispatch({ type: 'setMode', mode: value })}
-                aria-pressed={state.mode === value}
-                className={`rounded-pill px-3 py-1.5 text-xs font-bold transition-colors ${
-                  state.mode === value
-                    ? 'bg-surface text-ink shadow-petal'
-                    : 'text-ink-faint hover:text-ink'
-                }`}
-              >
-                {value === 'bouquet' ? 'Bouquet' : 'Letters'}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       <h2
@@ -204,7 +155,7 @@ export default function Builder({ preset, mode }: BuilderProps) {
         tabIndex={-1}
         className="mb-5 font-display text-2xl text-ink focus:outline-none sm:text-3xl"
       >
-        <span className="text-ink-faint">Step {state.step + 1}.</span> {stepTitle}
+        {stepTitle}
       </h2>
 
       <AnimatePresence mode="wait" initial={false}>
@@ -212,7 +163,7 @@ export default function Builder({ preset, mode }: BuilderProps) {
           {state.step === 0 && <StepFlowers state={state} dispatch={dispatch} />}
           {state.step === 1 && <StepArrange state={state} dispatch={dispatch} />}
           {state.step === 2 && <StepWrap state={state} dispatch={dispatch} />}
-          {state.step === 3 && <StepShare state={state} dispatch={dispatch} />}
+          {state.step === 3 && <StepFinish state={state} />}
         </motion.div>
       </AnimatePresence>
 
@@ -222,18 +173,9 @@ export default function Builder({ preset, mode }: BuilderProps) {
             Back
           </Button>
 
-          <div className="flex items-center gap-3">
-            {!canAdvance(state) && state.step === 0 && (
-              <p className="hidden text-sm text-ink-faint sm:block">
-                {state.mode === 'letters'
-                  ? 'Type something to spell out.'
-                  : 'Pick 6 to 10 flowers.'}
-              </p>
-            )}
-            <Button size="lg" onClick={handleNext} disabled={!canAdvance(state)}>
-              {state.step === 2 ? 'Make the link' : 'Next'}
-            </Button>
-          </div>
+          <Button size="lg" onClick={handleNext} disabled={!canAdvance(state)}>
+            {state.step === 2 ? 'Finish' : 'Next'}
+          </Button>
         </div>
       )}
     </div>

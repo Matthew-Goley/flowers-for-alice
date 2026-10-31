@@ -1,6 +1,6 @@
 /**
  * The flower catalog: art, names, colour defaults and the one-line meanings
- * shown in the Garden. All copy here is original to this project.
+ * used as builder tooltips. All copy here is original to this project.
  */
 
 import type { FlowerType } from '../../types/bouquet';
@@ -25,7 +25,7 @@ export interface FlowerInfo {
   /** Display name, title case. */
   name: string;
   art: FlowerArt;
-  /** One line, shown in the Garden and as a tooltip in the builder. */
+  /** One line, shown as a tooltip in the builder. */
   meaning: string;
   defaultColor: string;
   /** Colours that particularly suit this bloom, offered first in the picker. */
@@ -131,7 +131,7 @@ export const FLOWERS: Record<FlowerType, FlowerInfo> = {
   },
 };
 
-/** Catalog order, used by the picker grid and the Garden. */
+/** Catalog order, used by the picker grid. */
 export const FLOWER_LIST: readonly FlowerInfo[] = FLOWER_TYPES.map((type) => FLOWERS[type]);
 
 export { default as Anemone } from './Anemone';

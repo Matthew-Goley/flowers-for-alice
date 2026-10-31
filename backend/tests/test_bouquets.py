@@ -1,4 +1,4 @@
-"""API behaviour: create, fetch, 404, validation, locking, rate limiting."""
+"""API behaviour: the create code, create, fetch, home, validation, locking, rate limiting."""
 
 from __future__ import annotations
 
@@ -30,7 +30,80 @@ def test_health(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["app"] == settings.app_name
+    assert "version" in body
+
+
+# --------------------------------------------------------------------------- #
+# the create code
+# --------------------------------------------------------------------------- #
+
+
+def test_unlock_accepts_the_right_code(client: TestClient) -> None:
+    assert client.post("/api/unlock", json={"code": "520"}).status_code == 204
+
+
+@pytest.mark.parametrize("code", ["", "521", "5200", " 520", "abc"])
+def test_unlock_rejects_a_wrong_code(client: TestClient, code: str) -> None:
+    response = client.post("/api/unlock", json={"code": code})
+    assert response.status_code == 403
+    assert "detail" in response.json()
+
+
+def test_the_code_comes_from_settings(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "create_code", "tulip")
+    assert client.post("/api/unlock", json={"code": "520"}).status_code == 403
+    assert client.post("/api/unlock", json={"code": "tulip"}).status_code == 204
+
+
+def test_create_without_the_code_is_refused(client: TestClient) -> None:
+    del client.headers["X-Create-Code"]
+    response = client.post("/api/bouquets", json=make_design())
+    assert response.status_code == 403
+    assert client.get("/api/home").json() is None
+
+
+def test_create_with_a_wrong_code_is_refused(client: TestClient) -> None:
+    response = client.post("/api/bouquets", json=make_design(), headers={"X-Create-Code": "999"})
+    assert response.status_code == 403
+
+
+def test_unlock_is_rate_limited(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "rate_limit_unlock", "3/minute")
+    limiter.enabled = True
+    limiter.reset()
+
+    codes = [client.post("/api/unlock", json={"code": "000"}).status_code for _ in range(5)]
+    assert codes[:3] == [403, 403, 403]
+    assert codes[3:] == [429, 429]
+
+
+# --------------------------------------------------------------------------- #
+# the home page bouquet
+# --------------------------------------------------------------------------- #
+
+
+def test_home_is_empty_before_the_first_bouquet(client: TestClient) -> None:
+    response = client.get("/api/home")
+    assert response.status_code == 200
+    assert response.json() is None
+
+
+def test_home_shows_the_newest_bouquet(client: TestClient) -> None:
+    create(client, recipient_name="First")
+    newest = create(client, recipient_name="Second")
+
+    body = client.get("/api/home").json()
+    assert body["id"] == newest["id"]
+    assert body["recipient_name"] == "Second"
+    assert len(body["flowers"]) == 7
+
+
+def test_a_sealed_home_bouquet_withholds_its_contents(client: TestClient) -> None:
+    create(client, reveal_at=(datetime.now(UTC) + timedelta(days=2)).isoformat())
+    body = client.get("/api/home").json()
+    assert body["locked"] is True
+    assert "flowers" not in body
+    assert "message" not in body
 
 
 # --------------------------------------------------------------------------- #
@@ -42,7 +115,6 @@ def test_create_returns_short_url_safe_id(client: TestClient) -> None:
     body = create(client)
     assert len(body["id"]) == ID_LENGTH
     assert set(body["id"]) <= set(ID_ALPHABET)
-    assert body["url_path"] == f"/b/{body['id']}"
 
 
 def test_ids_are_unique(client: TestClient) -> None:
@@ -96,10 +168,6 @@ def test_unknown_id_is_404(client: TestClient) -> None:
     response = client.get("/api/bouquets/zzzzzzzz")
     assert response.status_code == 404
     assert "detail" in response.json()
-
-
-def test_unknown_og_id_is_404(client: TestClient) -> None:
-    assert client.get("/api/og/zzzzzzzz").status_code == 404
 
 
 # --------------------------------------------------------------------------- #
@@ -278,3 +346,4 @@ def test_reads_are_not_rate_limited(client: TestClient, monkeypatch: pytest.Monk
 
     for _ in range(8):
         assert client.get(f"/api/bouquets/{created['id']}").status_code == 200
+        assert client.get("/api/home").status_code == 200

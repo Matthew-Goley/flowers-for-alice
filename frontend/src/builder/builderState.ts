@@ -33,7 +33,7 @@ export const STEPS: readonly { title: string; short: string }[] = [
   { title: 'Choose flowers', short: 'Flowers' },
   { title: 'Arrange', short: 'Arrange' },
   { title: 'Wrap and message', short: 'Wrap' },
-  { title: 'Share', short: 'Share' },
+  { title: 'Put it on the home page', short: 'Finish' },
 ];
 
 export interface BuilderState {
@@ -118,7 +118,7 @@ export function flowerCountStatus(counts: Record<string, number>): CountStatus {
     total,
     valid,
     atMax,
-    label: `${total} / ${MIN_BOUQUET_FLOWERS}-${MAX_BOUQUET_FLOWERS} flowers`,
+    label: `${total} / ${MIN_BOUQUET_FLOWERS}-${MAX_BOUQUET_FLOWERS}`,
     hint,
   };
 }
@@ -153,7 +153,7 @@ export function canAdvance(state: BuilderState, step: StepIndex = state.step): b
  *
  * Derived from the state rather than remembered as "furthest visited", which
  * means a step stops being reachable the moment its prerequisite breaks. The
- * share step is never jumpable: reaching it publishes the bouquet, so it has
+ * finish step is never jumpable: reaching it saves the bouquet, so it has
  * to go through the Next button.
  */
 export function maxReachableStep(state: BuilderState): number {
@@ -338,13 +338,6 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
     default:
       return state;
   }
-}
-
-/** Build the arrangement for a state that has none yet (used by presets). */
-export function ensureArranged(state: BuilderState): BuilderState {
-  if (state.flowers.length > 0) return state;
-  const seed = state.seed || newSeed();
-  return { ...state, seed, flowers: rearrange(state, seed) };
 }
 
 /** Convert builder state into the payload the API accepts. */

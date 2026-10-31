@@ -35,7 +35,7 @@ export type FlowerArt = (props: FlowerArtProps) => ReactElement;
 export const MONO_INK = 'currentColor';
 
 /**
- * Default paper colour: the light-theme card surface.
+ * Default paper colour: the page itself, which is plain white.
  *
  * Mono petals are filled with the colour behind them, not with `none`. It
  * matters: with `fill="none"` every ring shows through every other ring and a
@@ -46,7 +46,7 @@ export const PAPER_LIGHT = '#ffffff';
 export const PAPER_DARK = '#2f2429';
 
 /** Line colour for mono art, passed down for the same reason as the paper. */
-export const INK_LIGHT = '#3f3038';
+export const INK_LIGHT = '#262626';
 export const INK_DARK = '#f6ebe4';
 
 /**

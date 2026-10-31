@@ -66,7 +66,7 @@ describe('flowerCountStatus', () => {
   });
 
   it('renders a live counter label', () => {
-    expect(flowerCountStatus({ rose: 4 }).label).toBe('4 / 6-10 flowers');
+    expect(flowerCountStatus({ rose: 4 }).label).toBe('4 / 6-10');
   });
 
   it('uses singular wording for the last flower', () => {

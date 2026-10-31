@@ -1,13 +1,12 @@
 /**
  * The bouquet itself: one square SVG that every surface reuses.
  *
- * The builder, the recipient page, the share preview and the PNG export all
- * render this same component, which is the only way the thing the sender
- * arranges is guaranteed to be the thing the recipient opens.
+ * The builder steps and the home page all render this same component, which
+ * is the only way the bouquet that gets arranged is guaranteed to be the
+ * bouquet the home page shows.
  *
  * Layer order, back to front: greenery, stems, blooms, sleeve, ribbon. Blooms
- * are sorted by their y position so lower flowers overlap higher ones, which
- * matches the server-side painter in `backend/app/og_render.py`.
+ * are sorted by their y position so lower flowers overlap higher ones.
  */
 
 import {
@@ -46,7 +45,7 @@ export interface BouquetCanvasProps {
   /**
    * Line colour. Set as the SVG's `color`, which is what `currentColor` in the
    * mono art resolves to. Passed explicitly rather than inherited from CSS so
-   * the serialised copy used by the PNG export still draws its lines.
+   * the SVG stays self-contained.
    */
   ink: string;
   /** Draw only the wrapped sleeve, for a bouquet that has not been opened. */
@@ -240,7 +239,7 @@ export default function BouquetCanvas({
                   cy={50}
                   r={54}
                   fill="none"
-                  stroke="#cf6382"
+                  stroke={ink}
                   strokeWidth={4}
                   strokeDasharray="10 8"
                   opacity={0.9}

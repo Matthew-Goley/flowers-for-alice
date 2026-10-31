@@ -1,29 +1,10 @@
 @import 'tailwindcss';
 
-/*
- * Dark mode is driven by a class on <html> rather than the media query alone,
- * because the header has a manual toggle. The inline script in index.html sets
- * the class before first paint.
- */
-@custom-variant dark (&:where(.dark, .dark *));
-
 @theme {
   --font-display: 'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
   --font-sans: 'Nunito Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  /* Fixed palette: these never flip between themes. */
-  --color-cream-50: #fffaf6;
-  --color-cream-100: #fdf3ec;
-  --color-cream-200: #f7e8dd;
-  --color-cream-300: #efd9c9;
-
-  --color-blush-100: #fdeef2;
-  --color-blush-200: #fadce3;
-  --color-blush-300: #f3bccb;
-  --color-blush-400: #e4879f;
-  --color-blush-500: #cf6382;
-  --color-blush-600: #ab4762;
-
+  /* Fixed palette, used by the success notice. */
   --color-sage-100: #eef3ea;
   --color-sage-200: #dde8d6;
   --color-sage-300: #a8bf9c;
@@ -31,18 +12,9 @@
   --color-sage-500: #5c7d52;
   --color-sage-600: #41603a;
 
-  --color-plum-700: #3b2d35;
-  --color-plum-800: #2f2429;
-  --color-plum-900: #241c21;
-  --color-plum-950: #1a1419;
-
-  --color-gold-300: #f2d08a;
-  --color-gold-400: #e8b14a;
-  --color-gold-500: #c9902c;
-
   /*
-   * Semantic tokens. These point at the --pp-* variables below, which is what
-   * lets a single class like `bg-surface` be correct in both themes.
+   * Semantic tokens. These point at the --pp-* variables below, so the whole
+   * palette is edited in one block.
    */
   --color-page: var(--pp-page);
   --color-surface: var(--pp-surface);
@@ -59,8 +31,8 @@
   --radius-card: 1.5rem;
   --radius-pill: 999px;
 
-  --shadow-petal: 0 1px 2px rgb(63 48 56 / 0.04), 0 10px 30px -12px rgb(63 48 56 / 0.18);
-  --shadow-petal-lg: 0 2px 4px rgb(63 48 56 / 0.05), 0 28px 60px -24px rgb(63 48 56 / 0.3);
+  --shadow-petal: 0 1px 2px rgb(0 0 0 / 0.04), 0 10px 30px -12px rgb(0 0 0 / 0.14);
+  --shadow-petal-lg: 0 2px 4px rgb(0 0 0 / 0.04), 0 28px 60px -24px rgb(0 0 0 / 0.22);
 
   --ease-petal: cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -68,33 +40,18 @@
 :root {
   color-scheme: light;
 
-  --pp-page: #fffaf6;
+  /* White page, neutral greys. Colour comes from the flowers, not the chrome. */
+  --pp-page: #ffffff;
   --pp-surface: #ffffff;
-  --pp-sunk: #fdf3ec;
-  --pp-ink: #3f3038;
-  --pp-ink-soft: #6b5862;
-  --pp-ink-faint: #9b8793;
-  --pp-line: #f0e2d8;
-  --pp-line-strong: #e2cfc2;
-  --pp-accent: #cf6382;
-  --pp-accent-ink: #ab4762;
-  --pp-accent-wash: #fdeef2;
-}
-
-:root.dark {
-  color-scheme: dark;
-
-  --pp-page: #241c21;
-  --pp-surface: #2f2429;
-  --pp-sunk: #1f181d;
-  --pp-ink: #f6ebe4;
-  --pp-ink-soft: #cbb7c0;
-  --pp-ink-faint: #9c868f;
-  --pp-line: #43343b;
-  --pp-line-strong: #574450;
-  --pp-accent: #f3bccb;
-  --pp-accent-ink: #fadce3;
-  --pp-accent-wash: #3b2d35;
+  --pp-sunk: #f5f5f4;
+  --pp-ink: #1c1c1c;
+  --pp-ink-soft: #57534e;
+  --pp-ink-faint: #a8a29e;
+  --pp-line: #ececea;
+  --pp-line-strong: #d6d3d1;
+  --pp-accent: #1c1c1c;
+  --pp-accent-ink: #1c1c1c;
+  --pp-accent-wash: #f5f5f4;
 }
 
 @layer base {

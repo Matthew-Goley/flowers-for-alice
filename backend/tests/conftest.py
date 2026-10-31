@@ -1,7 +1,8 @@
 """Test fixtures.
 
-Each test gets its own SQLite file and its own OG cache directory, so nothing
-leaks between tests and the developer's real `backend/data` is never touched.
+Each test gets its own SQLite file, so nothing leaks between tests and the
+developer's real `backend/data` is never touched. The `client` fixture sends
+the correct create code by default; tests about the code override the header.
 """
 
 from __future__ import annotations
@@ -29,9 +30,7 @@ def isolated_storage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     )
     SQLModel.metadata.create_all(engine)
 
-    # `main._meta_tags` reaches for the module-level engine directly.
     monkeypatch.setattr(db_module, "engine", engine)
-    monkeypatch.setattr("app.main.engine", engine)
     monkeypatch.setattr(settings, "data_dir", tmp_path)
 
     def override() -> Iterator[Session]:
@@ -56,7 +55,7 @@ def reset_rate_limiter() -> Iterator[None]:
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    with TestClient(app) as test_client:
+    with TestClient(app, headers={"X-Create-Code": settings.create_code}) as test_client:
         yield test_client
 
 

@@ -1,22 +1,12 @@
 /**
- * Product-level constants.
- *
- * The name, tagline and domain come from /brand.json at the repo root (the one
- * place to edit for a rename); the backend reads the same file. Everything else
- * here is UI configuration that has no business being scattered through
- * components.
+ * UI configuration that has no business being scattered through components.
  */
-
-export const APP_NAME = __BRAND__.name;
-export const TAGLINE = __BRAND__.tagline;
-export const DOMAIN = __BRAND__.domain;
-export const SUPPORT_EMAIL = __BRAND__.supportEmail;
 
 /** Storage keys. Bump the suffix if a shape change would break old drafts. */
 export const STORAGE_KEYS = {
   draft: 'petalpost:draft:v1',
-  theme: 'petalpost:theme',
-  music: 'petalpost:music',
+  /** sessionStorage: the create code, once the server has accepted it. */
+  code: 'petalpost:code',
 } as const;
 
 /** Petal colours offered in the builder. Hand-picked to look good together. */

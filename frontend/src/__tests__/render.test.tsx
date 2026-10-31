@@ -10,15 +10,15 @@
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import App from '../App';
 import BouquetCanvas from '../components/BouquetCanvas';
 import { FLOWER_LIST } from '../components/flowers';
+import { STORAGE_KEYS } from '../config';
 import { arrangeBouquet, type Stem } from '../lib/arrange';
 import { buildLetterBouquet } from '../lib/letters';
 import { INK_LIGHT, PAPER_LIGHT } from '../components/flowers/flowerGeometry';
-import { OCCASIONS } from '../lib/occasions';
 import { WRAP_STYLES, type GreeneryType } from '../types/bouquet';
 
 /**
@@ -44,53 +44,33 @@ const STEMS: Stem[] = [
 ];
 
 describe('pages', () => {
-  it('renders the landing page with the builder embedded', () => {
+  afterEach(() => sessionStorage.clear());
+
+  it('renders the home page with only the menu while the bouquet loads', () => {
+    // Effects do not run during static rendering, so this is the pre-fetch UI:
+    // no lone flower flashing up before a bouquet arrives.
     const html = render('/');
+    expect(html).toContain('aria-label="Open menu"');
+    expect(html).not.toContain('A single rose');
+  });
 
-    expect(html).toContain('Petal Post');
-    expect(html).toContain('that never wilt');
-    // The builder is on the page, at step one.
+  it('sends /create home without an accepted code', () => {
+    const html = render('/create');
+    expect(html).not.toContain('Choose flowers');
+  });
+
+  it('renders the builder on /create once the code is accepted', () => {
+    sessionStorage.setItem(STORAGE_KEYS.code, '520');
+    const html = render('/create');
     expect(html).toContain('Choose flowers');
-    expect(html).toContain('0 / 6-10 flowers');
-    // Supporting sections.
-    expect(html).toContain('How it works');
-    expect(html).toContain('Questions, answered');
-    expect(html).toContain('Is it really free?');
+    expect(html).toContain('0 / 6-10');
   });
 
-  it('renders every flower and its meaning in the garden', () => {
-    const html = render('/garden');
-
-    for (const flower of FLOWER_LIST) {
-      expect(html).toContain(flower.name);
-      // Meanings contain apostrophes and the markup is escaped, so compare on
-      // the first few words only.
-      expect(html).toContain(flower.meaning.split(',')[0]?.slice(0, 20));
+  it('carries no product branding', () => {
+    sessionStorage.setItem(STORAGE_KEYS.code, '520');
+    for (const route of ['/', '/create']) {
+      expect(render(route)).not.toMatch(/flowers for alice|petal post/i);
     }
-  });
-
-  it('renders the letters page in letter mode', () => {
-    const html = render('/letters');
-    expect(html).toContain('Spell it out in flowers');
-    expect(html).toContain('What should it spell?');
-  });
-
-  it('renders each occasion preset', () => {
-    for (const occasion of OCCASIONS) {
-      const html = render(`/occasion/${occasion.slug}`);
-      expect(html).toContain(occasion.heading);
-    }
-  });
-
-  it('renders the not-found page', () => {
-    const html = render('/nope');
-    expect(html).toContain('never bloomed');
-  });
-
-  it('renders the recipient page in its loading state', () => {
-    // Effects do not run during static rendering, so this is the pre-fetch UI.
-    const html = render('/b/abcd1234');
-    expect(html).toContain('Fetching your flowers');
   });
 });
 

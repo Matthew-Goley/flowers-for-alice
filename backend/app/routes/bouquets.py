@@ -1,22 +1,29 @@
-"""Create, read and preview bouquets."""
+"""Unlock the builder, create bouquets and read back the one on the home page."""
 
 from __future__ import annotations
 
 import json
+import secrets
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import FileResponse
-from sqlmodel import Session
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from sqlmodel import Session, col, select
 
 from ..config import settings
 from ..db import get_session
 from ..models import Bouquet
-from ..og_render import render_to_path
-from ..rate_limit import create_limit, limiter
-from ..schemas import BouquetCreated, BouquetDesign, BouquetLocked, BouquetOut
+from ..rate_limit import create_limit, limiter, unlock_limit
+from ..schemas import BouquetCreated, BouquetDesign, BouquetLocked, BouquetOut, UnlockRequest
 
 router = APIRouter(prefix="/api", tags=["bouquets"])
+
+WRONG_CODE = "That code is not right."
+
+
+def code_matches(code: str | None) -> bool:
+    if not code:
+        return False
+    return secrets.compare_digest(code.encode(), settings.create_code.encode())
 
 
 def load_bouquet(bouquet_id: str, session: Session) -> Bouquet:
@@ -40,35 +47,8 @@ def is_locked(row: Bouquet, *, now: datetime | None = None) -> bool:
     return moment > (now or datetime.now(UTC))
 
 
-@router.post("/bouquets", response_model=BouquetCreated, status_code=201)
-@limiter.limit(create_limit)
-def create_bouquet(
-    request: Request,
-    design: BouquetDesign,
-    session: Session = Depends(get_session),
-) -> BouquetCreated:
-    row = Bouquet(
-        mode=design.mode,
-        payload_json=design.model_dump_json(),
-        reveal_at=design.reveal_at,
-    )
-    session.add(row)
-    session.commit()
-    session.refresh(row)
-    return BouquetCreated(id=row.id, url_path=f"/b/{row.id}")
-
-
-@router.get(
-    "/bouquets/{bouquet_id}",
-    response_model=BouquetOut | BouquetLocked,
-    responses={404: {"description": "No such bouquet"}},
-)
-def read_bouquet(
-    bouquet_id: str,
-    response: Response,
-    session: Session = Depends(get_session),
-) -> BouquetOut | BouquetLocked:
-    row = load_bouquet(bouquet_id, session)
+def present(row: Bouquet, response: Response) -> BouquetOut | BouquetLocked:
+    """The public view of a bouquet, with the contents withheld while it is sealed."""
     design = design_of(row)
 
     if is_locked(row):
@@ -86,48 +66,75 @@ def read_bouquet(
             sender_name=design.get("sender_name", ""),
         )
 
-    response.headers["Cache-Control"] = "public, max-age=300"
+    response.headers["Cache-Control"] = "no-cache"
     return BouquetOut(id=row.id, created_at=row.created_at, locked=False, **design)
 
 
-@router.get(
-    "/og/{bouquet_id}",
-    response_class=FileResponse,
-    responses={
-        200: {"content": {"image/png": {}}, "description": "1200x630 preview"},
-        404: {"description": "No such bouquet"},
-    },
+@router.post("/unlock", status_code=204, responses={403: {"description": "Wrong code"}})
+@limiter.limit(unlock_limit)
+def unlock(request: Request, body: UnlockRequest) -> Response:
+    """Check the create code before the builder opens.
+
+    This only gates the UI. The code is checked again on create, which is the
+    check that actually protects the home page.
+    """
+    if not code_matches(body.code):
+        raise HTTPException(status_code=403, detail=WRONG_CODE)
+    return Response(status_code=204)
+
+
+@router.post(
+    "/bouquets",
+    response_model=BouquetCreated,
+    status_code=201,
+    responses={403: {"description": "Missing or wrong create code"}},
 )
-def bouquet_og_image(
-    bouquet_id: str,
+@limiter.limit(create_limit)
+def create_bouquet(
+    request: Request,
+    design: BouquetDesign,
+    x_create_code: str | None = Header(default=None),
     session: Session = Depends(get_session),
-) -> FileResponse:
-    """A social preview of the bouquet, cached on disk after the first render."""
-    row = load_bouquet(bouquet_id, session)
-    locked = is_locked(row)
+) -> BouquetCreated:
+    if not code_matches(x_create_code):
+        raise HTTPException(status_code=403, detail=WRONG_CODE)
 
-    # Locked and unlocked previews are different pictures, so they need
-    # different cache entries: the file name carries the state.
-    suffix = "locked" if locked else "open"
-    path = settings.og_cache_dir / f"{row.id}-{suffix}.png"
-
-    if not path.exists():
-        render_to_path(
-            design_of(row),
-            path,
-            app_name=settings.app_name,
-            tagline=settings.tagline,
-            hide_contents=locked,
-            reveal_at=row.reveal_at,
-        )
-
-    return FileResponse(
-        path,
-        media_type="image/png",
-        headers={
-            # Short cache while locked so the preview flips over on reveal day.
-            "Cache-Control": "public, max-age=600"
-            if locked
-            else "public, max-age=31536000, immutable"
-        },
+    row = Bouquet(
+        mode=design.mode,
+        payload_json=design.model_dump_json(),
+        reveal_at=design.reveal_at,
     )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return BouquetCreated(id=row.id)
+
+
+@router.get(
+    "/home",
+    response_model=BouquetOut | BouquetLocked | None,
+    responses={200: {"description": "The newest bouquet, or null before the first one"}},
+)
+def read_home(
+    response: Response,
+    session: Session = Depends(get_session),
+) -> BouquetOut | BouquetLocked | None:
+    """The bouquet on the home page: whichever was created most recently."""
+    row = session.exec(select(Bouquet).order_by(col(Bouquet.created_at).desc()).limit(1)).first()
+    if row is None:
+        response.headers["Cache-Control"] = "no-cache"
+        return None
+    return present(row, response)
+
+
+@router.get(
+    "/bouquets/{bouquet_id}",
+    response_model=BouquetOut | BouquetLocked,
+    responses={404: {"description": "No such bouquet"}},
+)
+def read_bouquet(
+    bouquet_id: str,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> BouquetOut | BouquetLocked:
+    return present(load_bouquet(bouquet_id, session), response)

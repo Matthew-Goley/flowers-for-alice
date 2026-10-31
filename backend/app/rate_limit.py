@@ -1,7 +1,7 @@
-"""Rate limiting for the one endpoint that writes.
+"""Rate limiting for the endpoints that write or check the create code.
 
-The limit string is read through a callable so tests can tighten it at runtime
-without re-importing the application.
+The limit strings are read through callables so tests can tighten them at
+runtime without re-importing the application.
 """
 
 from __future__ import annotations
@@ -16,3 +16,7 @@ limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabl
 
 def create_limit() -> str:
     return settings.rate_limit_create
+
+
+def unlock_limit() -> str:
+    return settings.rate_limit_unlock

@@ -4,12 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A free virtual bouquet maker: build a digital bouquet, write a note, share it as
-a short link. Standalone repo, no relation to the other projects in `_Dev_ALL/`.
+A single-page bouquet display. The home page shows the most recently created
+bouquet, or one stemmed rose before any exists. A menu in the bottom-left
+corner opens a code prompt; the right code unlocks the four-step builder, and
+finishing it replaces the home page bouquet for everyone. Standalone repo, no
+relation to the other projects in `_Dev_ALL/`.
 
-Three names for the same thing, so don't be thrown: the directory is `FFA`, the
-git remote is `flowers-for-alice`, and the product is **Petal Post** (a working
-name, defined in `brand.json`).
+The site carries **no product branding**: no name, logo, tagline or footer. The
+page title is just "Flowers". `render.test.tsx` asserts that the old product
+names ("Flowers for Alice", "Petal Post") never render. The git remote is
+still `flowers-for-alice`.
+
+Internal identifiers still carry the old working title on purpose and should be
+left alone: the `PETALPOST_` env prefix, the `petalpost:*` storage keys and
+`petalpost.db`. Renaming them would invalidate saved drafts, break any deployed
+`.env`, and orphan an existing database, all for something no user ever sees.
 
 All artwork and copy are original to this project and must stay that way. The
 brief explicitly ruled out copying anything from digi-bouquet.com; nothing here
@@ -19,8 +28,7 @@ is traced, downloaded or adapted from another site.
 
 ```
 /frontend   React 19 + TypeScript 6 + Vite 8 + Tailwind v4 + React Router 7
-/backend    Python 3.12 + FastAPI + SQLModel (SQLite) + Pillow
-/brand.json product name and tagline, read by both halves
+/backend    Python 3.12 + FastAPI + SQLModel (SQLite)
 ```
 
 In dev these are two processes and Vite proxies `/api` to port 8000. In prod
@@ -33,8 +41,8 @@ Backend (`cd backend`, venv at `.venv`):
 ```bash
 .venv/Scripts/activate                       # Windows
 python -m uvicorn app.main:app --reload      # port 8000, docs at /docs
-python -m pytest                             # 77 tests
-python -m pytest tests/test_og.py::test_mono_and_letters_modes_render   # one test
+python -m pytest                             # 53 tests
+python -m pytest tests/test_bouquets.py::test_home_shows_the_newest_bouquet   # one test
 python -m ruff check .  &&  python -m ruff format .
 ```
 
@@ -43,7 +51,7 @@ Frontend (`cd frontend`):
 ```bash
 npm run dev          # port 5173, proxies /api to 8000
 npm run build        # tsc --noEmit, then vite build
-npm test             # vitest, 105 tests
+npm test             # vitest, 103 tests
 npx vitest run -t "undo returns the previous value"   # one test, by name
 npm run lint         # ESLint, type-aware
 npm run format       # Prettier
@@ -69,52 +77,82 @@ binary and vitest 5 does not pull vite-node in).
 
 ## Architecture
 
-### One canvas, six surfaces
+### Two routes
+
+| Route | File | What it is |
+|---|---|---|
+| `/` | `pages/Home.tsx` | The bouquet from `GET /api/home`, or `LoneFlower` when that is `null`. Plus `HomeMenu` |
+| `/create` | `pages/Create.tsx` | The builder. Redirects to `/` unless a code is in `sessionStorage` |
+
+Anything else redirects to `/`. Home renders nothing while loading, so the lone
+rose never flashes up ahead of a bouquet that is on its way.
+
+### The create code is checked twice, and only the second check matters
+
+`HomeMenu` posts the typed code to `POST /api/unlock` (204 or 403). On success
+`lib/unlock.ts` keeps it in `sessionStorage` and the browser goes to `/create`.
+That only gates the UI. `POST /api/bouquets` requires the code again in the
+`X-Create-Code` header (compared with `secrets.compare_digest`), and that check
+is what stops anyone replacing the home bouquet from devtools. The code is
+`settings.create_code`, env `PETALPOST_CREATE_CODE`, default `520`. Both
+endpoints are rate limited. A 403 on create makes `StepFinish` forget the
+stored code and send the user back to re-enter it; the draft survives.
+
+### "The home bouquet" is just the newest row
+
+There is no home pointer or settings table. `GET /api/home` returns the
+`Bouquet` with the latest `created_at`, or `null`. Older bouquets stay in the
+database and remain readable by id via `GET /api/bouquets/{id}`.
+
+### One canvas, every surface
 
 `frontend/src/components/BouquetCanvas.tsx` renders a square `0 0 100 100` SVG
-and is used by the arrange step, the wrap step, the share step, the landing
-hero, the recipient page and the PNG export. That single component is the only
-reason the bouquet the sender arranges is guaranteed to be the bouquet the
-recipient opens. Flower positions are `x`/`y` in that 0-100 space; blooms paint
-sorted by `y`, so lower flowers overlap higher ones.
+and is used by the arrange, wrap and finish steps and the home page. That
+single component is what guarantees the bouquet that gets arranged is the
+bouquet the home page shows. Flower positions are `x`/`y` in that 0-100 space;
+blooms paint sorted by `y`, so lower flowers overlap higher ones.
 
-### The bouquet is drawn twice, on purpose
-
-The browser draws SVG. The server draws the same stored geometry again with
-Pillow in `backend/app/og_render.py`, for the `/api/og/{id}` link preview.
-cairosvg was rejected: it needs native cairo/GTK, which is painful on Windows
-and heavy in a deploy image. The Pillow painter is not pixel-identical and does
-not need to be, but it mirrors the layout constants (`WRAP_TOP_Y`,
-`WRAP_BOTTOM_Y`, the binding point, the 0-100 space). Change the sleeve
-geometry on one side and the preview drifts from the real thing.
-
-### The schema lives in four places and must stay in step
+### The schema lives in three places and must stay in step
 
 | File | Holds |
 |---|---|
 | `backend/app/catalog.py` | the enums and the count limits |
 | `backend/app/schemas.py` | Pydantic validation, the authority |
 | `frontend/src/types/bouquet.ts` | the TypeScript mirror, incl. the snake_case wire types |
-| `backend/app/og_render.py` | `FLOWER_SPECS`, one entry per flower |
 
-Adding a flower, wrap or greenery style means touching all four. `lib/api.ts` is
-the only module allowed to know the API speaks snake_case.
+Adding a flower, wrap or greenery style means touching all three. `lib/api.ts`
+is the only module allowed to know the API speaks snake_case.
+
+### The builder is deliberately bare
+
+The builder offers plain colour bouquets only. Letter bouquets, line-art
+(`mono`) and reveal dates were removed from the UI, and `parseDraft` in
+`lib/storage.ts` forces `mode: 'bouquet'`, `mono: false` and `revealAt: null`
+so an older draft cannot bring them back. The reducer, `lib/letters.ts`,
+`BouquetCanvas` and the backend schema still support all three, which is why
+older stored bouquets keep rendering.
+
+Copy is kept to a minimum on purpose: numbered step dots with no labels, step
+titles with no "Step N." prefix, the counter reads just `0 / 6-10`, and there
+are no helper sentences or option descriptions. The only text under a flower
+card comes from `CARD_NOTES` in `StepFlowers.tsx` (tulip and daisy). The
+`meaning` and wrap `description` fields still exist in the catalogs but are not
+rendered. Do not add explanatory copy back without being asked.
 
 ### Scheduled bouquets are enforced by the server
 
-A bouquet with a future `reveal_at` returns `BouquetLocked` from
-`GET /api/bouquets/{id}`: no flowers, no message. The countdown is real, not a
-client-side curtain, and there is nothing to find in devtools. The OG image
-caches locked and open states under separate filenames so the preview flips
-over on reveal day.
+The builder no longer sets reveal dates, but the server still honours them. A
+bouquet with a future `reveal_at` comes back from `/api/home` (and
+`/api/bouquets/{id}`) as `BouquetLocked`: no flowers, no message. The home page
+draws it wrapped with a `Countdown`, which reloads the page at zero. There is
+nothing to find in devtools.
 
-### Link previews
+### Light only, colour comes from the flowers
 
-Crawlers do not run the SPA, so `/b/{id}` is served by FastAPI with real Open
-Graph tags swapped into the block between the `<!--petalpost:meta-->` and
-`<!--/petalpost:meta-->` markers in `frontend/index.html`. Those markers wrap a
-dev fallback title; replacing the whole block (not just the opening marker) is
-what keeps the served page from carrying two `<title>` tags.
+There is no dark mode and no theme provider. The page is white; the chrome is
+neutral greys with a near-black accent, defined once as `--pp-*` variables in
+`src/index.css`. `lib/theme.ts` is now just `useArtColors()`, returning the
+constant `PAPER_LIGHT` / `INK_LIGHT`.
 
 ## Invariants that are easy to break
 
@@ -122,16 +160,15 @@ what keeps the served page from carrying two `<title>` tags.
 `none`, every petal ring shows through every other one and a layered flower
 renders as a spirograph. The inner rings are supposed to occlude the outer ones.
 
-**`paper` and `ink` are props, not CSS variables.** The PNG export serialises
-the live SVG and loads it as a standalone image, which inherits no CSS from the
-page. A `var(--color-surface)` in the art exports as black. This is why
-`FlowerArtProps` carries `paper` and `BouquetCanvas` carries `ink`.
+**`paper` and `ink` are props, not CSS variables.** The art has to stay a
+self-contained SVG (the art-sheet scripts render it outside any page), and a
+`var(--color-surface)` resolves to nothing there. This is why `FlowerArtProps`
+carries `paper` and `BouquetCanvas` carries `ink`.
 
 **Arrangement must stay deterministic.** `lib/random.ts` is seeded; `newSeed()`
 is the only sanctioned `Math.random` in the art path. Same stems plus same seed
-must always give the same bouquet, or undo, draft restore and the shared link
-stop agreeing with each other. (`MusicToggle` uses `Math.random` for its melody,
-which is fine: nothing persists it.)
+must always give the same bouquet, or undo, draft restore and the saved bouquet
+stop agreeing with each other.
 
 **`useHistory` does not own the value it tracks.** It is handed the live flower
 list on every render and `record(before)` is called with the pre-change value.
@@ -146,16 +183,17 @@ leak across bouquets.
 
 **These file splits exist for `react-refresh/only-export-components`; do not
 merge them back:** `flowerGeometry.ts` / `flowerKit.tsx`, `wrapTokens.ts` /
-`WrapPaper.tsx`, `lib/theme.ts` / `lib/ThemeProvider.tsx`. The rule only
-tolerates primitive constants alongside components, so functions and object
-constants have to live in the non-component file.
+`WrapPaper.tsx`. The rule only tolerates primitive constants alongside
+components, so functions and object constants have to live in the
+non-component file.
 
-**The share step posts exactly once**, guarded by a ref against StrictMode's
-double effect. Removing the guard creates two bouquets per visit.
+**The finish step posts exactly once**, guarded by a ref against StrictMode's
+double effect. Removing the guard saves two bouquets per visit. A restored
+draft never lands on that step, for the same reason.
 
 **Restart uvicorn after the first `npm run build`.** `app/main.py` registers the
-static and `/b/{id}` routes inside `if DIST.is_dir():`, evaluated at import. A
-server started before `dist` existed will 503 on `/` until restarted.
+static routes inside `if DIST.is_dir():`, evaluated at import. A server started
+before `dist` existed will 503 on `/` until restarted.
 
 **ESLint's typed configs are scoped to `**/*.{ts,tsx}`** because
 `eslint.config.js` is plain JS and belongs to no tsconfig; unscoped, the
@@ -163,21 +201,18 @@ type-aware rules fail to load for it and the whole lint run dies.
 
 ## Tests
 
-Backend covers create/fetch/404, every validation rule, sanitisation, letter
-mode, scheduled reveals, rate limiting, OG rendering across all twelve flowers
-and five wraps, and the escaping of user text into meta tags.
+Backend covers the create code (unlock, create without or with a wrong code,
+the code coming from settings, unlock rate limiting), the home endpoint (empty,
+newest wins, sealed), create/fetch/404, every validation rule, sanitisation,
+letter mode, scheduled reveals and rate limiting.
 
 Frontend covers the builder reducer and flower-count validation, the
 arrangement algorithm, letter glyph layout, undo/redo, and a render pass over
-every route via the real router (`render.test.tsx`) to catch what types cannot.
+both routes via the real router (`render.test.tsx`), including the code gate
+on `/create` and the no-branding check.
 
-Two testing notes: `conftest.py` disables the rate limiter by default and the
-limit string is read through a callable so a test can tighten it at runtime;
-and there is no Testing Library, just a dozen-line hook harness in
-`src/__tests__/testUtils.tsx`.
-
-## Renaming the product
-
-`brand.json` at the root is the single edit point. Vite inlines it via `define`
-at config time and the backend reads it at import, so both sides follow. The
-dev server needs a restart to pick up a change.
+Testing notes: `conftest.py` disables the rate limiter by default and the limit
+strings are read through callables so a test can tighten them at runtime; the
+`client` fixture sends the correct `X-Create-Code` by default, so tests about
+the code override or delete that header; and there is no Testing Library, just
+a dozen-line hook harness in `src/__tests__/testUtils.tsx`.
