@@ -1,6 +1,12 @@
-import { useId, type ReactElement } from 'react';
+import type { ReactElement } from 'react';
 import { darken, lighten } from '../../lib/color';
-import { flowerPalette, type FlowerArtProps } from './flowerGeometry';
+import {
+  flowerPalette,
+  toned,
+  useArtId,
+  variationFor,
+  type FlowerArtProps,
+} from './flowerGeometry';
 
 /** Side petals, each used twice: drawn, and as the clip for the contact shadow. */
 const LEFT =
@@ -34,9 +40,19 @@ const FRONT =
  * several tulips in different colours. Mono mode drops every gradient and
  * highlight and keeps the line work, with opaque paper fills as usual.
  */
-export default function Tulip({ color, mono, paper }: FlowerArtProps): ReactElement {
+export default function Tulip({
+  color: chosen,
+  mono,
+  paper,
+  variant,
+}: FlowerArtProps): ReactElement {
+  // Variation: a shade lighter or darker, and a cup a touch slimmer or fuller,
+  // scaled about the base so the stem still meets it in the same place.
+  const v = variationFor(variant);
+  const color = toned(chosen, v.tone);
+  const girth = 0.9 + (v.open - 0.93) * 1.5;
   const p = flowerPalette(color, mono, paper);
-  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const uid = useArtId();
   const sw = mono ? 1.4 : 0.9;
 
   const front = `tulip-front-${uid}`;
@@ -52,7 +68,11 @@ export default function Tulip({ color, mono, paper }: FlowerArtProps): ReactElem
   const leafEdge = mono ? p.edge : '#4f6b47';
 
   return (
-    <g>
+    <g
+      transform={
+        variant ? `translate(50 84) scale(${girth.toFixed(3)} 1) translate(-50 -84)` : undefined
+      }
+    >
       {!mono && (
         <defs>
           <linearGradient

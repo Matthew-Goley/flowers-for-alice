@@ -51,10 +51,6 @@ export default function HomeMenu() {
     };
   }, [panel, close]);
 
-  useEffect(() => {
-    if (panel === 'code') inputRef.current?.focus();
-  }, [panel]);
-
   const startCreate = () => {
     // Already unlocked this session: straight in.
     if (readCode()) {
@@ -98,7 +94,16 @@ export default function HomeMenu() {
       };
 
   return (
-    <div ref={rootRef} className="fixed bottom-5 left-5 z-40 flex flex-col items-start gap-3">
+    <div
+      ref={rootRef}
+      className="fixed z-40 flex flex-col items-start gap-3"
+      // Clear the iPhone home indicator and rounded corners: the page uses
+      // viewport-fit=cover, so without this the button can sit under them.
+      style={{
+        bottom: 'max(1.25rem, env(safe-area-inset-bottom))',
+        left: 'max(1.25rem, env(safe-area-inset-left))',
+      }}
+    >
       <AnimatePresence mode="wait">
         {panel === 'menu' && (
           <motion.div
@@ -138,6 +143,10 @@ export default function HomeMenu() {
             </label>
             <input
               ref={inputRef}
+              // Focus on mount, not from an effect on `panel`: the form only
+              // mounts after the menu's exit animation, so an effect would run
+              // before the input exists. (iOS opens the keyboard on tap only.)
+              autoFocus
               id={inputId}
               type="password"
               inputMode="numeric"

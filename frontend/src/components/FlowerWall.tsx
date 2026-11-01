@@ -8,21 +8,29 @@
  * down over the ones still standing, and the reveal runs top to bottom.
  *
  * The white ground behind the flowers fades as they start to fall; it is only
- * there so gaps between blooms never show the page early.
+ * there so gaps between blooms never show the page early. It is 98.5% opaque,
+ * not 100%, on purpose: a fully opaque cover lets the browser skip painting
+ * the bouquet underneath until the fall reveals it, and that first paint of a
+ * detailed SVG then lands on the first frames of the animation as a stall. A
+ * hair of translucency makes it paint while the wall is still standing.
  *
  * Purely decorative and never persisted, so it draws from a fresh seed each
  * visit rather than a stored one.
  */
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { FLOWER_LIST, FLOWERS } from './flowers';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { ArtDetailContext, FLOWER_LIST, FLOWERS, type ArtDetail } from './flowers';
 import { useArtColors } from '../lib/theme';
 import { between, makeRng, newSeed } from '../lib/random';
 import type { FlowerType } from '../types/bouquet';
 
-/** Grid pitch in pixels; each bloom is drawn larger than this so they overlap. */
-const CELL = 88;
-const BLOOM = CELL * 1.6;
+/**
+ * Grid pitch in pixels; each bloom is drawn larger than this so they overlap.
+ * Kept coarse on purpose: every flower is a detailed SVG (100 to 200 elements),
+ * and a finer grid costs real main-thread time on the first paint.
+ */
+const CELL = 124;
+const BLOOM = CELL * 1.55;
 /** Shortest time the wall stands before falling, in ms. */
 const MIN_HOLD = 900;
 /** Spread of start times from the top row to the bottom row, in ms. */
@@ -30,6 +38,8 @@ const CASCADE = 750;
 const FALL_MIN = 1000;
 const FALL_MAX = 1350;
 const JITTER = 250;
+/** Ease-in, like something let go of: slow to start, fast by the bottom. */
+const FALL_EASING = 'cubic-bezier(0.5, 0, 0.8, 0.25)';
 
 interface WallFlower {
   key: string;
@@ -81,47 +91,36 @@ function layWall(width: number, height: number): { flowers: WallFlower[]; total:
 export default function FlowerWall({ ready, onDone }: { ready: boolean; onDone: () => void }) {
   const { paper } = useArtColors();
   const [held, setHeld] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Laid out once, at the size of the screen it first appears on.
   const wall = useMemo(() => layWall(window.innerWidth, window.innerHeight), []);
   const falling = ready && held;
 
-  useEffect(() => {
-    const timer = setTimeout(() => setHeld(true), MIN_HOLD);
-    return () => clearTimeout(timer);
-  }, []);
+  // Touch devices and narrow screens get lighter flowers: the same shapes and
+  // colours without the decorative layers, so a phone paints the wall fast.
+  const [detail] = useState<ArtDetail>(() =>
+    window.matchMedia?.('(pointer: coarse)').matches || window.innerWidth < 768
+      ? 'lite'
+      : 'full',
+  );
 
-  useEffect(() => {
-    if (!falling) return;
-    const timer = setTimeout(onDone, wall.total + 50);
-    return () => clearTimeout(timer);
-  }, [falling, onDone, wall.total]);
-
-  return (
-    <div
-      className={`fixed inset-0 z-50 overflow-hidden transition-colors duration-500 ${
-        falling ? 'pointer-events-none bg-transparent' : 'bg-white'
-      }`}
-      aria-hidden="true"
-    >
-      {wall.flowers.map((flower) => {
+  // Built once: these elements are the same objects on every render, so React
+  // skips them entirely when the wall starts to fall, instead of re-rendering
+  // thousands of SVG nodes at the moment the animation needs the main thread.
+  const blooms = useMemo(
+    () =>
+      wall.flowers.map((flower) => {
         const Art = FLOWERS[flower.type].art;
-        const style = {
+        const style: CSSProperties = {
           left: flower.left,
           top: flower.top,
           width: BLOOM,
           height: BLOOM,
-          '--wall-spin': `${flower.spin}deg`,
-          animationDelay: `${flower.delay}ms`,
-          animationDuration: `${flower.duration}ms`,
-        } as CSSProperties;
+        };
 
         return (
-          <div
-            key={flower.key}
-            className={`wall-flower ${falling ? 'is-falling' : ''}`}
-            style={style}
-          >
+          <div key={flower.key} className="wall-flower" style={style}>
             <svg
               viewBox="0 0 100 100"
               className="h-full w-full"
@@ -134,7 +133,58 @@ export default function FlowerWall({ ready, onDone }: { ready: boolean; onDone: 
             </svg>
           </div>
         );
-      })}
+      }),
+    [wall, paper],
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => setHeld(true), MIN_HOLD);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!falling) return;
+    const timer = setTimeout(onDone, wall.total + 50);
+    return () => clearTimeout(timer);
+  }, [falling, onDone, wall.total]);
+
+  /*
+   * The fall runs on the Web Animations API, not a CSS class. Adding a class
+   * to the container (or to every flower) makes the browser recheck the style
+   * of every SVG node inside, thousands of them, on the first frame of the
+   * fall; on a phone that was a visible stall. element.animate() changes no
+   * classes, and a transform-only animation runs on the compositor.
+   */
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!falling || !container) return;
+    const drop = window.innerHeight + 220;
+    const animations = Array.from(
+      container.querySelectorAll<HTMLElement>('.wall-flower'),
+      (element, i) => {
+        const flower = wall.flowers[i];
+        if (!flower) return null;
+        return element.animate(
+          [
+            { transform: 'translate3d(0, 0, 0) rotate(0deg)' },
+            { transform: `translate3d(0, ${drop}px, 0) rotate(${flower.spin}deg)` },
+          ],
+          { duration: flower.duration, delay: flower.delay, easing: FALL_EASING, fill: 'both' },
+        );
+      },
+    );
+    return () => animations.forEach((animation) => animation?.cancel());
+  }, [falling, wall]);
+
+  return (
+    <div
+      ref={containerRef}
+      className={`fixed inset-0 z-50 overflow-hidden transition-colors duration-500 ${
+        falling ? 'pointer-events-none bg-transparent' : 'bg-white/[0.985]'
+      }`}
+      aria-hidden="true"
+    >
+      <ArtDetailContext.Provider value={detail}>{blooms}</ArtDetailContext.Provider>
     </div>
   );
 }

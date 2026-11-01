@@ -10,8 +10,8 @@
  * hot-reload the artwork without reloading the page.
  */
 
-import type { ReactElement, ReactNode } from 'react';
-import { CENTER, PAPER_LIGHT } from './flowerGeometry';
+import { useContext, type ReactElement, type ReactNode } from 'react';
+import { ArtDetailContext, CENTER, PAPER_LIGHT } from './flowerGeometry';
 
 export interface PetalRingProps {
   /** How many petals in this ring. */
@@ -26,6 +26,29 @@ export interface PetalRingProps {
   stroke: string;
   strokeWidth?: number;
   opacity?: number;
+  /**
+   * Colour of a soft drop shadow cast by this ring onto whatever is beneath
+   * it. Omit in mono mode: line art has no shading.
+   */
+  shadow?: string;
+  /** A detail line drawn on every petal (a midrib, a lit rim), in petal space. */
+  detail?: string;
+  detailStroke?: string;
+  detailWidth?: number;
+  detailOpacity?: number;
+  /**
+   * 0 to 1: how far each petal strays from perfect spacing and size. Real
+   * flowers are never regular; a little jitter is most of what stops a ring
+   * looking stamped. Deterministic, driven by `seed`.
+   */
+  jitter?: number;
+  seed?: number;
+}
+
+/** A repeatable pseudo-random number in [0, 1) for petal `i` of ring `seed`. */
+function wobble(i: number, seed: number, salt: number): number {
+  const x = Math.sin(i * 12.9898 + seed * 78.233 + salt * 37.719) * 43758.5453;
+  return x - Math.floor(x);
 }
 
 function place(angle: number, offset: number): string {
@@ -44,14 +67,121 @@ export function PetalRing({
   stroke,
   strokeWidth = 1.1,
   opacity,
+  shadow,
+  detail,
+  detailStroke,
+  detailWidth = 0.6,
+  detailOpacity = 0.5,
+  jitter = 0,
+  seed = 0,
 }: PetalRingProps): ReactElement {
+  // Lite drawing keeps the petals and drops the decoration around them.
+  const lite = useContext(ArtDetailContext) === 'lite';
+  const ringShadow = lite ? undefined : shadow;
+  const ringDetail = lite ? undefined : detail;
   const step = 360 / count;
+  const transforms = Array.from({ length: count }, (_, i) => {
+    const angle = phase + step * i + (wobble(i, seed, 1) - 0.5) * step * 0.4 * jitter;
+    const sy = 1 + (wobble(i, seed, 2) - 0.5) * 0.26 * jitter;
+    const sx = 1 + (wobble(i, seed, 3) - 0.5) * 0.22 * jitter;
+    const base = place(angle, offset);
+    return jitter ? `${base} scale(${sx.toFixed(3)} ${sy.toFixed(3)})` : base;
+  });
   return (
-    <g fill={fill} stroke={stroke} strokeWidth={strokeWidth} opacity={opacity}>
-      {Array.from({ length: count }, (_, i) => (
-        <path key={i} d={d} transform={place(phase + step * i, offset)} />
-      ))}
+    <g opacity={opacity}>
+      {ringShadow && (
+        <g fill={ringShadow} opacity={0.2} transform="translate(0.45 1)">
+          {transforms.map((t, i) => (
+            <path key={i} d={d} transform={t} />
+          ))}
+        </g>
+      )}
+      <g fill={fill} stroke={stroke} strokeWidth={strokeWidth}>
+        {transforms.map((t, i) => (
+          <path key={i} d={d} transform={t} />
+        ))}
+      </g>
+      {ringDetail && (
+        <g
+          fill="none"
+          stroke={detailStroke ?? stroke}
+          strokeWidth={detailWidth}
+          opacity={detailOpacity}
+        >
+          {transforms.map((t, i) => (
+            <path key={i} d={ringDetail} transform={t} />
+          ))}
+        </g>
+      )}
     </g>
+  );
+}
+
+export interface LightingProps {
+  id: string;
+  /** Radius of the lit area: roughly the flower's own radius. */
+  radius?: number;
+  strength?: number;
+}
+
+/**
+ * Soft light from the top left over a whole bloom: a pale glow on the near
+ * shoulder that fades to nothing well inside the flower's edge. There is
+ * deliberately no matching shade: on open flowers (lily, orchid) the far side
+ * has gaps, and a shade there smudges the background. Ring shadows supply the
+ * depth instead. Skip it in mono mode.
+ */
+export function Lighting({
+  id,
+  radius = 30,
+  strength = 1,
+}: LightingProps): ReactElement | null {
+  const lite = useContext(ArtDetailContext) === 'lite';
+  if (lite) return null;
+  return (
+    <g pointerEvents="none">
+      <defs>
+        <radialGradient id={`${id}-light`}>
+          <stop offset="0" stopColor="#ffffff" stopOpacity={0.36 * strength} />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <circle
+        cx={CENTER - radius * 0.32}
+        cy={CENTER - radius * 0.36}
+        r={radius * 0.72}
+        fill={`url(#${id}-light)`}
+      />
+    </g>
+  );
+}
+
+export interface RadialFillProps {
+  id: string;
+  /** Radius in flower units; stops run from the heart outward. */
+  r: number;
+  stops: readonly (readonly [number, string])[];
+  /** The ring's `offset`: how far each petal's base sits from the heart. */
+  offset?: number;
+}
+
+/**
+ * A radial gradient for a ring of petals, centred on the heart of the flower.
+ *
+ * Gradients in user space are resolved in the coordinate system of the shape
+ * that uses them, and every petal in a ring is drawn in its own rotated frame
+ * with its base at the origin. So the heart is at (0, offset) for every petal,
+ * not at (50, 50): centring there lets one gradient shade each petal from its
+ * base to its tip, deep where the petals crowd together and light where they
+ * open out.
+ */
+export function RadialFill({ id, r, stops, offset = 0 }: RadialFillProps): ReactElement {
+  return (
+    <radialGradient id={id} cx={0} cy={offset} r={r} gradientUnits="userSpaceOnUse">
+      {stops.map(([at, color]) => (
+        <stop key={at} offset={at} stopColor={color} />
+      ))}
+    </radialGradient>
   );
 }
 

@@ -83,8 +83,13 @@ bouquet, or `null`. On the first visit a wall of flowers covers the screen and
 falls away to reveal it. A bouquet with a future reveal date is drawn wrapped
 with a countdown; the server withholds its flowers and message until then.
 
-**Arranging.** Drag a flower to move it. Hold R and move the mouse to turn the
-selected flower (or the one being dragged). Undo and redo with Ctrl/Cmd+Z.
+**Arranging.** Drag a flower to move it. To turn it: on a computer, hold R and
+move the mouse; on a phone, hold the flower and twist a second finger around
+it. Undo and redo with the buttons, or Ctrl/Cmd+Z.
+
+**Phones.** The site works the same on phones, iPhone included (iOS 16.4 or
+newer). The opening flower wall draws lighter flowers on touch screens so it
+stays smooth.
 
 **The code.** The menu's code prompt posts to `POST /api/unlock`. On success the
 code is kept in `sessionStorage` and the browser goes to `/create`. That check
@@ -92,8 +97,8 @@ only gates the UI: `POST /api/bouquets` requires the code again in an
 `X-Create-Code` header, so the home page cannot be replaced from devtools.
 Both endpoints are rate limited.
 
-**The builder (`/create`)** is four steps: choose flowers (6 to 10 stems, or a
-letter bouquet), arrange (drag, shuffle, undo/redo), wrap and message, then
+**The builder (`/create`)** is four steps: choose flowers (6 to 10 stems),
+arrange (drag, turn, shuffle, undo/redo), wrap and message, then
 finish, which saves the bouquet and returns to the home page.
 
 ---

@@ -52,7 +52,7 @@ Frontend (`cd frontend`):
 ```bash
 npm run dev          # port 5173, proxies /api to 8000
 npm run build        # tsc --noEmit, then vite build
-npm test             # vitest, 107 tests
+npm test             # vitest, 110 tests
 npx vitest run -t "undo returns the previous value"   # one test, by name
 npm run lint         # ESLint, type-aware
 npm run format       # Prettier
@@ -92,17 +92,35 @@ rose never flashes up ahead of a bouquet that is on its way.
 
 On the first visit of a page load, `components/FlowerWall.tsx` covers the
 screen with a grid of overlapping blooms over a white ground. It waits for the
-home fetch to settle (and at least `MIN_HOLD`), then every bloom gets the
-`wall-fall` CSS animation from `index.css`, top rows first. Rows are emitted
-bottom-first in the DOM so each upper row paints over the ones below as it
-falls. The bouquet underneath is drawn whole; nothing is staged one bloom at a
-time any more. A module-level `wallPlayed` flag in `Home.tsx` stops the wall
-replaying when the user comes back from `/create`. It is set only when the wall
-finishes, because StrictMode mounts twice. Reduced motion skips the wall. Headless
-browsers with a virtual time budget do not advance CSS animations, so check it
-with real-time frames, not `--virtual-time-budget`.
+home fetch to settle (and at least `MIN_HOLD`), then every bloom falls, top
+rows first. Rows are emitted bottom-first in the DOM so each upper row paints
+over the ones below as it falls. The bouquet underneath is drawn whole; nothing
+is staged one bloom at a time any more. A module-level `wallPlayed` flag in
+`Home.tsx` stops the wall replaying when the user comes back from `/create`. It
+is set only when the wall finishes, because StrictMode mounts twice. Reduced
+motion skips the wall.
 
-### Rotating a flower: hold R and move the mouse
+The wall is tuned for phones, and each of these was a measured stall. Keep
+them:
+
+- **The fall runs on `element.animate()`, not a CSS class.** Toggling a class
+  on the container (or on every flower) restyles thousands of SVG nodes on the
+  first frame of the fall.
+- **The bloom elements are built once in a `useMemo`.** Starting the fall then
+  re-renders only the container, not every flower's SVG.
+- **The white backing is 98.5% opaque, not 100%.** A fully opaque cover lets
+  the browser skip painting the bouquet until it is revealed, and that first
+  paint lands on the animation.
+- **`.wall-flower` has `will-change: transform`.** It is promoted to a layer
+  while standing still, not as it starts moving.
+- **On touch or narrow screens the wall renders `lite`** (`ArtDetailContext`):
+  no ring shadows, detail lines or lighting. Shapes and colours are unchanged,
+  and the bouquet itself is always full detail.
+
+Headless browsers with a virtual time budget do not advance animations, so
+check it with real-time frames, not `--virtual-time-budget`.
+
+### Rotating a flower: hold R and move the mouse, or twist with two fingers
 
 In the arrange step, `BouquetCanvas` listens for R on `window` (ignored while
 typing in a field, or with Ctrl/Meta/Alt held). While R is held, horizontal
@@ -116,14 +134,88 @@ blurring) calls `onMoveEnd`. Angles go through `normaliseAngle` into
 on the `<svg>`; pointer capture retargets a drag to the flower's `<g>` and it
 bubbles up.
 
-### The tulip is the detailed one
+Phones have no R key, so touch gets a two-finger twist: hold a flower and turn
+a second finger around it. The `<svg>` records every pointer in the capture
+phase (`pointersRef`). A primary pointer clears the record first, because iOS
+can swallow a release when a system gesture cuts in. A second finger landing
+on another flower does not start a new drag. The twist is incremental (the
+change in the angle between the two fingers since the last move), and it
+restarts whenever the pair of pointers changes, so a bad first sample cannot
+make the flower jump.
 
-`Tulip.tsx` is drawn with far more care than the other eleven flowers. It is her
-favourite. It is the only flower with SVG gradients and a clip path, so it calls
-`useId()` for per-instance ids. Two consequences: render it as a component
-(`createElement(art, ...)` or `<Art />`), never call it as a plain function; and
-two separate `renderToStaticMarkup` calls produce colliding ids, so put a
-multi-tulip preview in one render. Mono mode drops every gradient and highlight.
+### The flower art is detailed, and shares one toolkit
+
+All twelve flowers are drawn to the standard the tulip set (it is her
+favourite, and was done first). They share a kit in `flowerGeometry.ts` (pure)
+and `flowerKit.tsx` (components):
+
+- **`RadialFill`** shades a whole ring of petals with one gradient. The trap:
+  a `userSpaceOnUse` gradient is resolved in the coordinate system of the shape
+  using it, and every ring petal is drawn in its own rotated frame with its
+  base at the origin. So the heart is at `(0, offset)`, not `(50, 50)`.
+  Centring on `(50, 50)` silently flattens every petal to the last stop.
+- **`PetalRing`** takes `shadow` (an offset dark copy, so each ring shades the
+  one beneath), `detail` (a midrib, vein or lit rim drawn on every petal), and
+  `jitter` + `seed` (deterministic per-petal wobble in angle and size; a little
+  of it is most of what stops rings looking stamped).
+- **`Lighting`** adds a soft top-left glow. It has deliberately no matching
+  shade: on open flowers (lily, orchid) a shade smudges the background
+  between petals.
+- **`useArtId()`** gives per-instance gradient and clip ids. Every flower
+  calls it, so render flower art as a component (`<Art />` or
+  `createElement(art, ...)`), never as a plain function. Two separate
+  `renderToStaticMarkup` calls produce colliding ids, so put a multi-flower
+  preview in one render tree.
+
+Mono mode drops every gradient, shadow and highlight in every flower.
+
+The detail has a cost: a flower is 40 to 210 SVG elements. `FlowerWall` keeps
+its grid coarse (`CELL`) for that reason; on a 1280x800 screen the wall is about
+16k DOM nodes and roughly 340 ms of main-thread work on load, versus 28k and
+530 ms at the old pitch.
+
+### Repeats are varied, from array position
+
+`variantsFor(flowers)` in `lib/arrange.ts` numbers each flower among its own
+kind (first rose 0, second rose 1, and so on), and `BouquetCanvas` passes that
+as the `variant` prop. Variant 0 is the canonical drawing, which the picker
+shows; higher variants go through `variationFor()` to shift tone, ring phase,
+openness, petal count and the jitter seed. It depends only on order and type,
+never on position, so dragging a flower does not change how it is drawn, and
+the builder and home page always agree.
+
+### Greenery is filler behind the blooms
+
+`Greenery` is computed from the flowers. It places sprigs behind each bloom and
+in the gap between close neighbours, angled away from the binding point, and
+masks the whole layer to the bouquet's shape: a soft-edged circle per bloom
+(`OVERHANG` of its box radius, solid to `MASK_SOLID`) plus a bridge between
+neighbours. It shows in the gaps and fades out just past the outline. It is
+drawn after the stems and before the blooms. Do not go back to a hard
+`clipPath`: it slices leaves along visible arcs.
+
+### Phones and iOS
+
+The site is meant to behave the same on a phone as on a computer. Things that
+exist for that reason:
+
+- `HomeMenu` is offset by `env(safe-area-inset-*)`. `index.html` uses
+  `viewport-fit=cover`, so without the offset the button sits under the
+  iPhone home indicator.
+- `html` sets `touch-action: manipulation` (no double-tap-zoom delay) and
+  `-webkit-tap-highlight-color: transparent`.
+- The arrange canvas sets `touch-action: none`, so drags and twists are not
+  stolen by page scroll or pinch zoom. Scroll the page from outside the canvas.
+- Every text input is at least 16px, or iOS zooms the page on focus. Keep it
+  that way.
+- The code field uses `autoFocus`, not a focus effect: it mounts after the
+  menu's exit animation, so an effect runs before it exists. iOS still opens
+  the keyboard only on a real tap.
+- Tailwind v4 needs Safari 16.4 or newer (iOS 16.4, March 2023).
+
+These were checked by emulating an iPhone (390x844 at 3x, touch input, iOS
+user agent, 1x/4x/6x CPU throttling) over the DevTools protocol, not on a
+physical device.
 
 ### The create code is checked twice, and only the second check matters
 

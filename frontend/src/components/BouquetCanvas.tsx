@@ -5,8 +5,10 @@
  * is the only way the bouquet that gets arranged is guaranteed to be the
  * bouquet the home page shows.
  *
- * Layer order, back to front: greenery, stems, blooms, sleeve, ribbon. Blooms
- * are sorted by their y position so lower flowers overlap higher ones.
+ * Layer order, back to front: stems, greenery, blooms, sleeve, ribbon. Blooms
+ * are sorted by their y position so lower flowers overlap higher ones, and
+ * repeats of one kind are drawn as different instances (see `variantsFor`).
+ * Greenery is filler placed among the blooms, so it is computed from them.
  */
 
 import {
@@ -23,7 +25,7 @@ import type { BouquetMode, FlowerPlacement, GreeneryType, WrapStyle } from '../t
 import { FLOWERS } from './flowers';
 import Greenery from './greenery/Greenery';
 import WrapPaper, { Ribbon } from './wraps/WrapPaper';
-import { BINDING_POINT } from '../lib/arrange';
+import { BINDING_POINT, variantsFor } from '../lib/arrange';
 
 const STEM_COLOR = '#6d8c63';
 
@@ -122,6 +124,17 @@ export default function BouquetCanvas({
   const rotateRef = useRef<{ index: number; startX: number; startRotation: number } | null>(
     null,
   );
+  // Touch: every pointer currently down on the canvas, and the two-finger
+  // twist in progress. Phones have no R key, so on touch screens the same
+  // rotation is a twist: hold a flower and turn a second finger around it.
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const twistRef = useRef<{
+    index: number;
+    /** The two pointers being tracked; a different pair restarts the twist. */
+    pair: string;
+    lastAngle: number;
+    rotation: number;
+  } | null>(null);
 
   const setRefs = useCallback(
     (node: SVGSVGElement | null) => {
@@ -141,11 +154,15 @@ export default function BouquetCanvas({
     .map((flower, index) => ({ flower, index }))
     .filter((entry) => entry.index < limit)
     .sort((a, b) => a.flower.y - b.flower.y);
+  const variants = variantsFor(scene.flowers);
 
   const handlePointerDown = useCallback(
     (index: number) => (event: ReactPointerEvent<SVGGElement>) => {
       if (!onMoveFlower) return;
       event.preventDefault();
+      // A second finger landing on another flower is part of a twist, not a
+      // new drag: leave the flower under the first finger in charge.
+      if (pointersRef.current.size > 1) return;
       event.stopPropagation();
       draggingRef.current = index;
       onSelect?.(index);
@@ -191,9 +208,62 @@ export default function BouquetCanvas({
    * flower's group, and the event bubbles up here, so dragging and rotating
    * both arrive through this one path.
    */
+  /** Recorded in the capture phase, so it sees pointers that land on flowers too. */
+  const trackPointerDown = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
+    // A primary pointer starts a fresh gesture: forget any pointer whose
+    // release we never saw (iOS can swallow it when a system gesture cuts in).
+    if (event.isPrimary) pointersRef.current.clear();
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  }, []);
+
+  const trackPointerUp = useCallback(
+    (event: ReactPointerEvent<SVGSVGElement>) => {
+      pointersRef.current.delete(event.pointerId);
+      if (twistRef.current && pointersRef.current.size < 2) {
+        twistRef.current = null;
+        onMoveEnd?.();
+      }
+    },
+    [onMoveEnd],
+  );
+
   const handlePointerMove = useCallback(
     (event: ReactPointerEvent<SVGSVGElement>) => {
       const target = draggingRef.current ?? selectedIndex;
+      const pointers = pointersRef.current;
+      if (pointers.has(event.pointerId)) {
+        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      }
+
+      // Two fingers down: twist the flower by however far the line between
+      // them turned since the last move. Incremental rather than measured from
+      // a start angle, so a bad first sample can never cause a jump, and the
+      // angle can wrap past 180 degrees without a flip.
+      if (pointers.size >= 2 && onRotateFlower && target !== null) {
+        const flower = scene.flowers[target];
+        const [[idA, a], [idB, b]] = [...pointers.entries()] as [
+          [number, { x: number; y: number }],
+          [number, { x: number; y: number }],
+        ];
+        if (!flower || !a || !b) return;
+        const angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+        const pair = `${idA}:${idB}`;
+        const twist = twistRef.current;
+        if (!twist || twist.index !== target || twist.pair !== pair) {
+          twistRef.current = {
+            index: target,
+            pair,
+            lastAngle: angle,
+            rotation: flower.rotation,
+          };
+          return;
+        }
+        const step = ((((angle - twist.lastAngle + 180) % 360) + 360) % 360) - 180;
+        twist.lastAngle = angle;
+        twist.rotation += step;
+        onRotateFlower(target, twist.rotation);
+        return;
+      }
 
       if (rHeldRef.current && onRotateFlower && target !== null) {
         const flower = scene.flowers[target];
@@ -269,13 +339,12 @@ export default function BouquetCanvas({
       strokeLinecap="round"
       style={{ touchAction: interactive ? 'none' : undefined, color: ink }}
       onPointerMove={interactive ? handlePointerMove : undefined}
+      onPointerDownCapture={interactive ? trackPointerDown : undefined}
+      onPointerUpCapture={interactive ? trackPointerUp : undefined}
+      onPointerCancelCapture={interactive ? trackPointerUp : undefined}
     >
       {/* An opaque ground so the exported PNG is never transparent. */}
       <rect width="100" height="100" fill={paper} />
-
-      {!sealed && !isLetters && (
-        <Greenery kind={scene.greenery} mono={scene.mono} paper={paper} />
-      )}
 
       {!sealed && !isLetters && (
         <g aria-hidden="true">
@@ -291,6 +360,16 @@ export default function BouquetCanvas({
             />
           ))}
         </g>
+      )}
+
+      {!sealed && !isLetters && (
+        <Greenery
+          kind={scene.greenery}
+          flowers={indexed.map((entry) => entry.flower)}
+          bloomSize={BLOOM_SIZE}
+          mono={scene.mono}
+          paper={paper}
+        />
       )}
 
       {!sealed &&
@@ -333,7 +412,12 @@ export default function BouquetCanvas({
                   opacity={0.9}
                 />
               )}
-              <Art color={flower.color} mono={scene.mono} paper={paper} />
+              <Art
+                color={flower.color}
+                mono={scene.mono}
+                paper={paper}
+                variant={variants[index]}
+              />
             </g>
           );
         })}

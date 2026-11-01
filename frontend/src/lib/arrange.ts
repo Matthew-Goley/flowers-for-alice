@@ -161,6 +161,21 @@ export function reshuffle(
 }
 
 /**
+ * Which instance of its kind each flower is: 0 for the first rose, 1 for the
+ * second rose, and so on. The art uses it to vary repeats, so it must come
+ * from the stored array alone: the builder and the home page both call this
+ * on the same flowers and get the same answer.
+ */
+export function variantsFor(flowers: readonly FlowerPlacement[]): number[] {
+  const seen = new Map<string, number>();
+  return flowers.map((flower) => {
+    const n = seen.get(flower.type) ?? 0;
+    seen.set(flower.type, n + 1);
+    return n;
+  });
+}
+
+/**
  * Normalise an angle to (-180, 180]. The API accepts -360 to 360, and keeping
  * it small means repeated spins can never walk a rotation out of range.
  */

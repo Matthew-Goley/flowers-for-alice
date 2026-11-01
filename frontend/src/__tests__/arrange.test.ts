@@ -8,6 +8,7 @@ import {
   rotateFlower,
   splitRows,
   stemsFromCounts,
+  variantsFor,
   type Stem,
 } from '../lib/arrange';
 import { makeRng, shuffled } from '../lib/random';
@@ -180,6 +181,47 @@ describe('rotateFlower', () => {
     const snapshot = structuredClone(flowers);
     rotateFlower(flowers, 1, 90);
     expect(flowers).toEqual(snapshot);
+  });
+});
+
+describe('variantsFor', () => {
+  it('numbers each flower among its own kind, in array order', () => {
+    const flowers = arrangeBouquet(
+      [
+        { type: 'rose', color: '#cf6382' },
+        { type: 'tulip', color: '#e07a5f' },
+        { type: 'rose', color: '#cf6382' },
+        { type: 'rose', color: '#f3bccb' },
+        { type: 'tulip', color: '#e07a5f' },
+        { type: 'daisy', color: '#fbf3e7' },
+      ],
+      3,
+    );
+    const expected = new Map<string, number>();
+    const variants = variantsFor(flowers);
+    flowers.forEach((flower, i) => {
+      const n = expected.get(flower.type) ?? 0;
+      expect(variants[i]).toBe(n);
+      expected.set(flower.type, n + 1);
+    });
+  });
+
+  it('gives the first of every kind the canonical drawing', () => {
+    const flowers = arrangeBouquet(stems(4, 'peony').concat(stems(3, 'lily')), 5);
+    const firsts = new Set<string>();
+    variantsFor(flowers).forEach((variant, i) => {
+      const type = flowers[i]?.type ?? '';
+      if (!firsts.has(type)) {
+        expect(variant).toBe(0);
+        firsts.add(type);
+      }
+    });
+  });
+
+  it('ignores position, so dragging a flower never changes how it is drawn', () => {
+    const flowers = arrangeBouquet(stems(6), 8);
+    const moved = moveFlower(flowers, 2, 10, 10);
+    expect(variantsFor(moved)).toEqual(variantsFor(flowers));
   });
 });
 
