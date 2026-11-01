@@ -8,6 +8,8 @@
  * The first visit of each page load opens behind a wall of flowers that
  * falls away once the bouquet is ready (see FlowerWall).
  *
+ * Behind it all, our photos are scattered faintly (see PhotoBackdrop).
+ *
  * A scheduled bouquet arrives without its contents (the server withholds
  * them until the reveal date), so it is drawn wrapped, with a countdown.
  */
@@ -18,6 +20,7 @@ import BouquetCanvas, { type BouquetScene } from '../components/BouquetCanvas';
 import Countdown from '../components/Countdown';
 import FlowerWall from '../components/FlowerWall';
 import HomeMenu from '../components/HomeMenu';
+import PhotoBackdrop from '../components/PhotoBackdrop';
 import { FLOWERS } from '../components/flowers';
 import { fetchHome } from '../lib/api';
 import { useArtColors } from '../lib/theme';
@@ -60,24 +63,28 @@ export default function Home() {
 
   return (
     <div className="relative flex min-h-dvh flex-col items-center justify-center px-4 py-16">
+      <PhotoBackdrop />
+
       {/* Nothing renders while loading, so the lone flower never flashes up
           in front of a bouquet that is about to arrive. */}
-      {status === 'empty' && <LoneFlower />}
-      {status === 'ready' && bouquet && !bouquet.locked && <OpenView bouquet={bouquet} />}
-      {status === 'ready' && bouquet?.locked && (
-        <SealedView
-          scene={{
-            mode: bouquet.mode,
-            flowers: [],
-            greenery: 'none',
-            wrap: bouquet.wrap,
-            ribbon: bouquet.ribbon,
-            mono: false,
-          }}
-          recipientName={bouquet.recipientName}
-          revealAt={bouquet.revealAt}
-        />
-      )}
+      <div className="relative z-10 flex w-full flex-col items-center">
+        {status === 'empty' && <LoneFlower />}
+        {status === 'ready' && bouquet && !bouquet.locked && <OpenView bouquet={bouquet} />}
+        {status === 'ready' && bouquet?.locked && (
+          <SealedView
+            scene={{
+              mode: bouquet.mode,
+              flowers: [],
+              greenery: 'none',
+              wrap: bouquet.wrap,
+              ribbon: bouquet.ribbon,
+              mono: false,
+            }}
+            recipientName={bouquet.recipientName}
+            revealAt={bouquet.revealAt}
+          />
+        )}
+      </div>
 
       <HomeMenu />
       {showWall && <FlowerWall ready={status !== 'loading'} onDone={wallDone} />}
@@ -147,6 +154,7 @@ function OpenView({ bouquet }: { bouquet: OpenBouquet }) {
         scene={scene}
         paper={paper}
         ink={ink}
+        ground={false}
         className="aspect-square w-full"
         title={bouquet.recipientName ? `A bouquet for ${bouquet.recipientName}` : 'A bouquet'}
       />

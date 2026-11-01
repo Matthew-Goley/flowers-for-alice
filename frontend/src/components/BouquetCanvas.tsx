@@ -65,6 +65,11 @@ export interface BouquetCanvasProps {
   ink: string;
   /** Draw only the wrapped sleeve, for a bouquet that has not been opened. */
   sealed?: boolean;
+  /**
+   * Fill the square with `paper` behind the art. On by default; the home page
+   * turns it off so the photos behind the bouquet show around it.
+   */
+  ground?: boolean;
   /** Show only the first N blooms. Drives the one-by-one reveal. */
   visibleCount?: number;
   /** Enables dragging. Receives canvas-space coordinates (0-100). */
@@ -104,6 +109,7 @@ export default function BouquetCanvas({
   paper,
   ink,
   sealed = false,
+  ground = true,
   visibleCount,
   onMoveFlower,
   onRotateFlower,
@@ -343,8 +349,7 @@ export default function BouquetCanvas({
       onPointerUpCapture={interactive ? trackPointerUp : undefined}
       onPointerCancelCapture={interactive ? trackPointerUp : undefined}
     >
-      {/* An opaque ground so the exported PNG is never transparent. */}
-      <rect width="100" height="100" fill={paper} />
+      {ground && <rect width="100" height="100" fill={paper} />}
 
       {!sealed && !isLetters && (
         <g aria-hidden="true">

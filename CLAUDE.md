@@ -23,7 +23,8 @@ left alone: the `PETALPOST_` env prefix, the `petalpost:*` storage keys and
 
 All artwork and copy are original to this project and must stay that way. The
 brief explicitly ruled out copying anything from digi-bouquet.com; nothing here
-is traced, downloaded or adapted from another site.
+is traced, downloaded or adapted from another site. The one exception is the
+photos behind the home page bouquet, which are the couple's own.
 
 ## Layout
 
@@ -52,7 +53,7 @@ Frontend (`cd frontend`):
 ```bash
 npm run dev          # port 5173, proxies /api to 8000
 npm run build        # tsc --noEmit, then vite build
-npm test             # vitest, 110 tests
+npm test             # vitest, 124 tests
 npx vitest run -t "undo returns the previous value"   # one test, by name
 npm run lint         # ESLint, type-aware
 npm run format       # Prettier
@@ -64,6 +65,13 @@ Both servers must be up for the full app; the backend alone serves the API, and
 The tsconfig is a single flat config, deliberately, so a bare `tsc --noEmit`
 really does check everything. (Contrast `_lens/lens-app`, where the root
 tsconfig is a solution file and a bare `tsc --noEmit` silently checks nothing.)
+
+After adding, removing or renaming a photo in `frontend/assets/`:
+
+```bash
+cd frontend
+python scripts/prepare-photos.py             # needs Pillow; not an app dependency
+```
 
 Art review without clicking through the app:
 
@@ -242,6 +250,31 @@ single component is what guarantees the bouquet that gets arranged is the
 bouquet the home page shows. Flower positions are `x`/`y` in that 0-100 space;
 blooms paint sorted by `y`, so lower flowers overlap higher ones.
 
+The square is filled with `paper` by default. The home page passes
+`ground={false}` so the photos behind it show around the bouquet.
+
+### The photos behind the bouquet
+
+`components/PhotoBackdrop.tsx` scatters the couple's photos and message
+screenshots faintly across the home page (34% opacity, small tilted prints,
+a white radial glow over the middle). It sits under the bouquet, the lone
+rose and the sealed view alike, and the flower wall covers it while it loads.
+
+- **The originals in `frontend/assets/` never ship.** They are full-size phone
+  photos (30 MB) and most carry GPS coordinates. `scripts/prepare-photos.py`
+  turns each one upright, shrinks it to 720 px on the long side, writes it to
+  `public/photos/*.webp` with no metadata at all, and regenerates
+  `src/lib/photos.ts` (src plus pixel size). Do not hand-edit that file, and
+  never copy an original into `public/`.
+- **`lib/photoLayout.ts` decides placement**, pure and seeded. The screen is a
+  grid shaped to its aspect; cells whose middle falls inside an oval around
+  the bouquet (at most 560 px wide, 1.3 times as tall) stay empty, and the
+  grid grows until every photo has a free cell. Every photo gets the same
+  on-screen area, so a 5712 px camera photo and a 400 px screenshot read as
+  the same size; only strips wider than their cell are capped smaller.
+- The backdrop re-lays out on resize but ignores height changes under 20%,
+  because iOS changes the viewport height as its toolbars show and hide.
+
 ### The schema lives in three places and must stay in step
 
 | File | Holds |
@@ -336,7 +369,7 @@ the code coming from settings, unlock rate limiting), the home endpoint (empty,
 newest wins, sealed), create/fetch/404, every validation rule, sanitisation,
 letter mode, scheduled reveals and rate limiting.
 
-Frontend covers the builder reducer and flower-count validation, the
+Frontend covers the builder reducer and flower-count validation, the photo layout, the
 arrangement algorithm, letter glyph layout, undo/redo, and a render pass over
 both routes via the real router (`render.test.tsx`), including the code gate
 on `/create` and the no-branding check.

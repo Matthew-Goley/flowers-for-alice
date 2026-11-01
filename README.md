@@ -87,6 +87,11 @@ with a countdown; the server withholds its flowers and message until then.
 move the mouse; on a phone, hold the flower and twist a second finger around
 it. Undo and redo with the buttons, or Ctrl/Cmd+Z.
 
+**Photos.** Our photos sit faintly behind the bouquet. The originals live in
+`frontend/assets/` and are never served; after changing them, run
+`python scripts/prepare-photos.py` in `frontend/` (needs Pillow) to rebuild the
+small, metadata-free copies in `public/photos/`.
+
 **Phones.** The site works the same on phones, iPhone included (iOS 16.4 or
 newer). The opening flower wall draws lighter flowers on touch screens so it
 stays smooth.
