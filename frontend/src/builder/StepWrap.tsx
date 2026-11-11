@@ -85,7 +85,7 @@ export default function StepWrap({ state, dispatch }: Props) {
           <div className="grid gap-4 sm:grid-cols-2">
             <TextField
               label="Who is it for?"
-              placeholder="Marianne"
+              placeholder="Alice <3"
               autoComplete="off"
               maxLength={MAX_NAME_CHARS}
               value={state.recipientName}
